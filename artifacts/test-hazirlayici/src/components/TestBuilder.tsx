@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { Slider } from './ui/slider';
 import { generateTestPdf } from '@/lib/pdf-export';
 import type { Question } from '@/lib/db';
 import { FileDown, Eye, Printer, Settings2 } from 'lucide-react';
@@ -15,9 +16,11 @@ interface TestBuilderProps {
   questions: Question[];
   topicText: string;
   accentColor: string;
+  questionGapMm: number;
   templateId?: number;
   onTopicTextChange: (v: string) => void;
   onAccentColorChange: (v: string) => void;
+  onQuestionGapChange: (v: number) => void;
   onTemplateChange: (id?: number) => void;
 }
 
@@ -25,9 +28,11 @@ export default function TestBuilder({
   questions,
   topicText,
   accentColor,
+  questionGapMm,
   templateId,
   onTopicTextChange,
   onAccentColorChange,
+  onQuestionGapChange,
   onTemplateChange,
 }: TestBuilderProps) {
   const templates = useLiveQuery(() => db.templates.toArray());
@@ -48,6 +53,7 @@ export default function TestBuilder({
         questions,
         topicText,
         accentColor,
+        questionGapMm,
         templateDataUrl: selectedTemplate?.imageDataUrl,
         templateLayout: selectedTemplate?.layout,
       }, action);
@@ -62,9 +68,9 @@ export default function TestBuilder({
   return (
     <div className="flex flex-col h-full bg-slate-50">
       {/* Controls */}
-      <div className="p-4 border-b bg-white flex flex-col gap-4 shrink-0">
+      <div className="p-4 border-b bg-white flex flex-col gap-4 shrink-0 overflow-y-auto">
 
-        {/* Row 1: Topic text + color */}
+        {/* Konu + Renk */}
         <div className="flex gap-3 items-end flex-wrap">
           <div className="flex-1 min-w-[180px]">
             <Label className="mb-1.5 block text-sm font-medium">Konu Başlığı</Label>
@@ -90,7 +96,27 @@ export default function TestBuilder({
           </div>
         </div>
 
-        {/* Row 2: Template */}
+        {/* Soru arası boşluk */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <Label className="text-sm font-medium">Sorular Arası Boşluk</Label>
+            <span className="text-sm font-semibold text-primary">{questionGapMm} mm</span>
+          </div>
+          <Slider
+            min={0}
+            max={20}
+            step={1}
+            value={[questionGapMm]}
+            onValueChange={([v]) => onQuestionGapChange(v)}
+            className="w-full"
+          />
+          <div className="flex justify-between text-xs text-slate-400 mt-1">
+            <span>0 mm (sıkışık)</span>
+            <span>20 mm (geniş)</span>
+          </div>
+        </div>
+
+        {/* Şablon */}
         <div className="flex gap-3 items-end flex-wrap">
           <div className="flex-1 min-w-[160px]">
             <Label className="mb-1.5 block text-sm font-medium">İlk Sayfa Şablonu</Label>
@@ -123,7 +149,7 @@ export default function TestBuilder({
           )}
         </div>
 
-        {/* Info about template layout */}
+        {/* Şablon bilgi */}
         {selectedTemplate && (
           <div className="text-xs rounded-md bg-blue-50 border border-blue-100 px-3 py-2 text-blue-700 space-y-0.5">
             {selectedTemplate.layout?.topicRect
@@ -137,7 +163,7 @@ export default function TestBuilder({
           </div>
         )}
 
-        {/* PDF actions */}
+        {/* PDF Butonları */}
         <div className="flex items-center gap-2 pt-1 border-t">
           <Button
             onClick={() => run('preview')}
@@ -168,7 +194,7 @@ export default function TestBuilder({
         </div>
       </div>
 
-      {/* Preview area */}
+      {/* Önizleme */}
       <div className="flex-1 overflow-auto p-6 flex flex-col items-center gap-4 bg-slate-200">
         {questions.length === 0 ? (
           <div className="bg-white border rounded-lg p-12 text-center text-slate-500 shadow-sm w-full max-w-xl">
@@ -178,53 +204,49 @@ export default function TestBuilder({
         ) : (
           <div
             className="bg-white border rounded-lg shadow-sm w-full max-w-xl overflow-hidden"
-            style={{ aspectRatio: '1/1.414' }}
+            style={{ aspectRatio: '210/297' }}
           >
             <div className="p-4 h-full flex flex-col text-[10px]">
-              {/* Topic box preview */}
+              {/* Konu kutusu */}
               <div
-                className="border-2 rounded text-center py-1.5 mb-3 font-bold tracking-wide"
+                className="border-2 rounded text-center py-1.5 mb-3 font-bold tracking-wide shrink-0"
                 style={{ borderColor: accentColor, color: accentColor }}
               >
                 {topicText || 'KONU BAŞLIĞI'}
               </div>
-
-              {/* 2-column questions */}
-              <div className="flex flex-1 gap-3 overflow-hidden relative">
-                {/* Center divider */}
+              {/* 2 sütun */}
+              <div className="flex flex-1 gap-3 overflow-hidden relative min-h-0">
                 <div
                   className="absolute left-1/2 top-0 bottom-0 w-px"
                   style={{ backgroundColor: accentColor }}
                 />
-                <div className="flex-1 overflow-hidden space-y-1">
+                <div className="flex-1 overflow-hidden flex flex-col" style={{ gap: `${questionGapMm * 0.4}px` }}>
                   {questions.filter((_, i) => i % 2 === 0).map((q, i) => (
-                    <div key={q.id} className="flex items-start gap-0.5">
+                    <div key={q.id} className="flex items-start gap-0.5 shrink-0">
                       <span className="font-bold shrink-0">{i * 2 + 1}.</span>
                       <img src={q.imageDataUrl} alt="" className="w-full h-auto" />
                     </div>
                   ))}
                 </div>
-                <div className="flex-1 overflow-hidden space-y-1">
+                <div className="flex-1 overflow-hidden flex flex-col" style={{ gap: `${questionGapMm * 0.4}px` }}>
                   {questions.filter((_, i) => i % 2 === 1).map((q, i) => (
-                    <div key={q.id} className="flex items-start gap-0.5">
+                    <div key={q.id} className="flex items-start gap-0.5 shrink-0">
                       <span className="font-bold shrink-0">{i * 2 + 2}.</span>
                       <img src={q.imageDataUrl} alt="" className="w-full h-auto" />
                     </div>
                   ))}
                 </div>
               </div>
-
-              {/* Page number */}
-              <div className="text-center mt-1" style={{ color: accentColor, fontSize: '0.55rem' }}>1</div>
+              {/* Sayfa no */}
+              <div className="text-center mt-1 shrink-0" style={{ color: accentColor, fontSize: '0.55rem' }}>1</div>
             </div>
           </div>
         )}
         <p className="text-xs text-slate-400">
-          {questions.length} soru — PDF için "PDF İndir" veya "Önizle"ye tıklayın
+          {questions.length} soru · boşluk {questionGapMm}mm · PDF için "Önizle" veya "PDF İndir"
         </p>
       </div>
 
-      {/* Template editor modal */}
       {editingTemplate && selectedTemplate && (
         <TemplateEditorModal
           template={selectedTemplate}

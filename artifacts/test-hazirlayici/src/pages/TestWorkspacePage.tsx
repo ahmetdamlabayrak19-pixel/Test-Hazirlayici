@@ -19,6 +19,7 @@ export default function TestWorkspacePage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [topicText, setTopicText] = useState('');
   const [accentColor, setAccentColor] = useState('#2563eb');
+  const [questionGapMm, setQuestionGapMm] = useState(3);
   const [templateId, setTemplateId] = useState<number | undefined>();
 
   useEffect(() => {
@@ -149,9 +150,11 @@ export default function TestWorkspacePage() {
                 questions={questions}
                 topicText={topicText}
                 accentColor={accentColor}
+                questionGapMm={questionGapMm}
                 templateId={templateId}
                 onTopicTextChange={setTopicText}
                 onAccentColorChange={setAccentColor}
+                onQuestionGapChange={setQuestionGapMm}
                 onTemplateChange={setTemplateId}
               />
             </TabsContent>

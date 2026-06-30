@@ -6,20 +6,22 @@ export interface ExportConfig {
   accentColor: string;
   templateDataUrl?: string;
   templateLayout?: TemplateLayout;
+  questionGapMm?: number; // varsayılan 3mm
 }
 
-const DPI = 150;
+// A4 @ 200 DPI — iyi baskı kalitesi
+const DPI = 200;
 const MM = DPI / 25.4;
-const PAGE_W = Math.round(210 * MM);
-const PAGE_H = Math.round(297 * MM);
+const PAGE_W = Math.round(210 * MM);   // 1654 px
+const PAGE_H = Math.round(297 * MM);   // 2339 px
 const MARGIN = Math.round(10 * MM);
-const GAP = Math.round(5 * MM);
-const COL_W = Math.round((PAGE_W - 2 * MARGIN - GAP) / 2);
-const ROW_GAP = Math.round(3 * MM);
-const TOPIC_BOX_H = Math.round(14 * MM);
-const TOPIC_FONT = Math.round(10 * MM / 4);
-const PAGE_NUM_FONT = Math.round(7 * MM / 4);
-const Q_NUM_FONT = Math.round(8 * MM / 4);
+const COL_GAP = Math.round(5 * MM);
+const COL_W = Math.round((PAGE_W - 2 * MARGIN - COL_GAP) / 2);
+const TOPIC_BOX_H = Math.round(12 * MM);
+const TOPIC_FONT = Math.round(8 * MM / (25.4 / 72)); // ~8pt in px
+const PAGE_NUM_FONT = Math.round(6 * MM / (25.4 / 72));
+const Q_NUM_FONT = Math.round(7 * MM / (25.4 / 72));
+const PAGE_BOTTOM_RESERVE = Math.round(10 * MM); // sayfa numarası için
 
 function loadImg(src: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {
@@ -55,52 +57,50 @@ function roundedRect(
   ctx.closePath();
 }
 
+/** Görseli en-boy oranını bozmadan canvas içine sığdır (object-fit: contain) */
+function drawContain(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  cw: number,
+  ch: number
+) {
+  const ir = img.naturalWidth / img.naturalHeight;
+  const cr = cw / ch;
+  let dw: number, dh: number, dx: number, dy: number;
+  if (ir > cr) {
+    dw = cw; dh = cw / ir;
+    dx = 0; dy = (ch - dh) / 2;
+  } else {
+    dh = ch; dw = ch * ir;
+    dx = (cw - dw) / 2; dy = 0;
+  }
+  ctx.drawImage(img, dx, dy, dw, dh);
+}
+
 function drawPageNumber(ctx: CanvasRenderingContext2D, num: number, color: string) {
   ctx.save();
   ctx.fillStyle = color;
   ctx.font = `${PAGE_NUM_FONT}px Arial, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
-  ctx.fillText(`${num}`, PAGE_W / 2, PAGE_H - Math.round(3 * MM));
+  ctx.fillText(`${num}`, PAGE_W / 2, PAGE_H - Math.round(4 * MM));
   ctx.restore();
-}
-
-function placeQuestion(
-  ctx: CanvasRenderingContext2D,
-  img: HTMLImageElement,
-  q: Question,
-  qIndex: number,
-  col: number,
-  cY: number
-): number {
-  const rH = Math.round(COL_W * (q.height / q.width));
-  const x = MARGIN + col * (COL_W + GAP);
-  const numStr = `${qIndex + 1}.`;
-  ctx.save();
-  ctx.font = `bold ${Q_NUM_FONT}px Arial, sans-serif`;
-  ctx.fillStyle = '#000';
-  ctx.textAlign = 'left';
-  const numW = ctx.measureText(numStr).width + 4;
-  ctx.fillText(numStr, x, cY + Math.round(5 * MM / 4));
-  ctx.drawImage(img, x + numW, cY, COL_W - numW, rH);
-  ctx.restore();
-  return rH;
 }
 
 async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
   const { questions, topicText, accentColor, templateDataUrl, templateLayout } = config;
+  const rowGap = Math.round((config.questionGapMm ?? 3) * MM);
+  const bottomLimit = PAGE_H - MARGIN - PAGE_BOTTOM_RESERVE;
   const pages: HTMLCanvasElement[] = [];
 
   let templateImg: HTMLImageElement | null = null;
   if (templateDataUrl) {
-    try { templateImg = await loadImg(templateDataUrl); } catch { /* ignore */ }
+    try { templateImg = await loadImg(templateDataUrl); } catch { /* yoksay */ }
   }
 
   const qImgs = await Promise.all(questions.map(q => loadImg(q.imageDataUrl)));
 
-  const bottomLimit = PAGE_H - MARGIN - Math.round(8 * MM);
-
-  // ── PAGE 1 ────────────────────────────────────────────────────────────────
+  // ── SAYFA 1 ────────────────────────────────────────────────────────────
   const cv1 = document.createElement('canvas');
   cv1.width = PAGE_W; cv1.height = PAGE_H;
   const ctx1 = cv1.getContext('2d')!;
@@ -108,30 +108,31 @@ async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
   ctx1.fillStyle = '#fff';
   ctx1.fillRect(0, 0, PAGE_W, PAGE_H);
 
+  // Şablon arka planı — EN-BOY ORANI KORUNUR (contain)
   if (templateImg) {
-    ctx1.drawImage(templateImg, 0, 0, PAGE_W, PAGE_H);
+    drawContain(ctx1, templateImg, PAGE_W, PAGE_H);
   }
 
-  // Topic text in defined rect
+  // Konu metni — tanımlanan dikdörtgene yatay+dikey ortalı
   if (templateLayout?.topicRect && topicText) {
     const { x, y, w, h } = templateLayout.topicRect;
     const rx = x * PAGE_W, ry = y * PAGE_H, rw = w * PAGE_W, rh = h * PAGE_H;
     ctx1.save();
-    const fontSize = Math.max(Math.round(rh * 0.35), Math.round(6 * MM / 4));
-    ctx1.font = `bold ${fontSize}px Arial, sans-serif`;
+    const fs = Math.max(Math.round(rh * 0.38), Math.round(5 * MM));
+    ctx1.font = `bold ${fs}px Arial, sans-serif`;
     ctx1.fillStyle = accentColor;
     ctx1.textAlign = 'center';
     ctx1.textBaseline = 'middle';
-    ctx1.fillText(topicText, rx + rw / 2, ry + rh / 2, rw * 0.95);
+    ctx1.fillText(topicText, rx + rw / 2, ry + rh / 2, rw * 0.92);
     ctx1.restore();
   }
 
-  // Question start Y
+  // Soru başlangıç Y'si
   const startY = templateLayout?.questionStartY !== undefined
     ? Math.round(templateLayout.questionStartY * PAGE_H)
     : MARGIN;
 
-  // Center divider
+  // Orta dikey çizgi (başlangıç çizgisinden aşağı)
   const dvX = Math.round(PAGE_W / 2);
   ctx1.save();
   ctx1.strokeStyle = accentColor;
@@ -145,7 +146,6 @@ async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
   let col1Y = startY, col2Y = startY;
   let qi = 0;
 
-  // Place questions on page 1
   outer1: while (qi < questions.length) {
     const q = questions[qi];
     const img = qImgs[qi];
@@ -155,26 +155,22 @@ async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
     let cY = col === 0 ? col1Y : col2Y;
 
     if (cY + rH > bottomLimit) {
-      const otherCol = 1 - col;
-      const otherY = otherCol === 0 ? col1Y : col2Y;
-      if (otherY + rH <= bottomLimit) {
-        col = otherCol;
-        cY = otherY;
-      } else {
-        break outer1;
-      }
+      const other = 1 - col;
+      const otherY = other === 0 ? col1Y : col2Y;
+      if (otherY + rH <= bottomLimit) { col = other; cY = otherY; }
+      else break outer1;
     }
 
-    placeQuestion(ctx1, img, q, qi, col, cY);
-    if (col === 0) col1Y = cY + rH + ROW_GAP;
-    else col2Y = cY + rH + ROW_GAP;
+    placeQuestion(ctx1, img, q, qi, col, cY, rowGap);
+    if (col === 0) col1Y = cY + rH + rowGap;
+    else col2Y = cY + rH + rowGap;
     qi++;
   }
 
   drawPageNumber(ctx1, 1, accentColor);
   pages.push(cv1);
 
-  // ── SUBSEQUENT PAGES ─────────────────────────────────────────────────────
+  // ── SONRAKI SAYFALAR ─────────────────────────────────────────────────────
   let pageNum = 2;
   while (qi < questions.length) {
     const cv = document.createElement('canvas');
@@ -184,29 +180,26 @@ async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, PAGE_W, PAGE_H);
 
-    // Topic box
+    // Konu kutusu
     const boxY = MARGIN;
-    const radius = Math.round(3 * MM);
+    const r = Math.round(3 * MM);
     ctx.save();
     ctx.strokeStyle = accentColor;
     ctx.lineWidth = 2;
-    roundedRect(ctx, MARGIN, boxY, PAGE_W - 2 * MARGIN, TOPIC_BOX_H, radius);
+    roundedRect(ctx, MARGIN, boxY, PAGE_W - 2 * MARGIN, TOPIC_BOX_H, r);
     ctx.stroke();
-    ctx.restore();
-
     if (topicText) {
-      ctx.save();
       ctx.fillStyle = accentColor;
       ctx.font = `bold ${TOPIC_FONT}px Arial, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(topicText, PAGE_W / 2, boxY + TOPIC_BOX_H / 2, PAGE_W - 2 * MARGIN - Math.round(6 * MM));
-      ctx.restore();
     }
+    ctx.restore();
 
-    const contentY = boxY + TOPIC_BOX_H + Math.round(5 * MM);
+    const contentY = boxY + TOPIC_BOX_H + Math.round(4 * MM);
 
-    // Center divider
+    // Orta çizgi
     ctx.save();
     ctx.strokeStyle = accentColor;
     ctx.lineWidth = 1.5;
@@ -216,8 +209,7 @@ async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
     ctx.stroke();
     ctx.restore();
 
-    col1Y = contentY;
-    col2Y = contentY;
+    col1Y = contentY; col2Y = contentY;
 
     outerN: while (qi < questions.length) {
       const q = questions[qi];
@@ -228,19 +220,15 @@ async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
       let cY = col === 0 ? col1Y : col2Y;
 
       if (cY + rH > bottomLimit) {
-        const otherCol = 1 - col;
-        const otherY = otherCol === 0 ? col1Y : col2Y;
-        if (otherY + rH <= bottomLimit) {
-          col = otherCol;
-          cY = otherY;
-        } else {
-          break outerN;
-        }
+        const other = 1 - col;
+        const otherY = other === 0 ? col1Y : col2Y;
+        if (otherY + rH <= bottomLimit) { col = other; cY = otherY; }
+        else break outerN;
       }
 
-      placeQuestion(ctx, img, q, qi, col, cY);
-      if (col === 0) col1Y = cY + rH + ROW_GAP;
-      else col2Y = cY + rH + ROW_GAP;
+      placeQuestion(ctx, img, q, qi, col, cY, rowGap);
+      if (col === 0) col1Y = cY + rH + rowGap;
+      else col2Y = cY + rH + rowGap;
       qi++;
     }
 
@@ -252,8 +240,30 @@ async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
   return pages;
 }
 
+function placeQuestion(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  q: Question,
+  qi: number,
+  col: number,
+  cY: number,
+  _rowGap: number
+) {
+  const rH = Math.round(COL_W * (q.height / q.width));
+  const x = MARGIN + col * (COL_W + COL_GAP);
+  const numStr = `${qi + 1}.`;
+  ctx.save();
+  ctx.font = `bold ${Q_NUM_FONT}px Arial, sans-serif`;
+  ctx.fillStyle = '#000';
+  ctx.textAlign = 'left';
+  const numW = ctx.measureText(numStr).width + Math.round(2 * MM);
+  ctx.fillText(numStr, x, cY + Math.round(4.5 * MM));
+  ctx.drawImage(img, x + numW, cY, COL_W - numW, rH);
+  ctx.restore();
+}
+
 function canvasToJpeg(canvas: HTMLCanvasElement): Uint8Array {
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.93);
   const b64 = dataUrl.split(',')[1];
   const bin = atob(b64);
   const arr = new Uint8Array(bin.length);
@@ -261,18 +271,18 @@ function canvasToJpeg(canvas: HTMLCanvasElement): Uint8Array {
   return arr;
 }
 
+// A4 nokta boyutları (PDF standardı): 595.28 x 841.89 pt  ≈ 595 x 842
+const PDF_W = 595;
+const PDF_H = 842;
+
 function buildRawPdf(jpegs: Uint8Array[]): Uint8Array {
   const enc = new TextEncoder();
   const n = jpegs.length;
-  const pdfW = 595, pdfH = 842;
-
   const s = (str: string) => enc.encode(str);
 
   type ObjEntry = { id: number; bytes: Uint8Array };
   const objects: ObjEntry[] = [];
-
-  const catalogId = 1;
-  const pagesId = 2;
+  const catalogId = 1, pagesId = 2;
 
   function makeStream(dict: string, data: Uint8Array): Uint8Array {
     return concatBytes(s(`${dict}\nstream\n`), data, s('\nendstream'));
@@ -292,13 +302,14 @@ function buildRawPdf(jpegs: Uint8Array[]): Uint8Array {
     objects.push({
       id: pageId,
       bytes: s(
-        `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${pdfW} ${pdfH}] ` +
+        `<< /Type /Page /Parent ${pagesId} 0 R ` +
+        `/MediaBox [0 0 ${PDF_W} ${PDF_H}] ` +
         `/Contents ${contentId} 0 R ` +
         `/Resources << /XObject << /Im1 ${imageId} 0 R >> >> >>`
       )
     });
 
-    const contentData = s(`q ${pdfW} 0 0 ${pdfH} 0 0 cm /Im1 Do Q\n`);
+    const contentData = s(`q ${PDF_W} 0 0 ${PDF_H} 0 0 cm /Im1 Do Q\n`);
     objects.push({
       id: contentId,
       bytes: makeStream(`<< /Length ${contentData.length} >>`, contentData)
@@ -325,11 +336,8 @@ function buildRawPdf(jpegs: Uint8Array[]): Uint8Array {
   }
 
   const xrefOffset = offset;
-  let xref = `xref\n0 ${objects.length + 1}\n`;
-  xref += '0000000000 65535 f \n';
-  for (const off of offsets) {
-    xref += off.toString().padStart(10, '0') + ' 00000 n \n';
-  }
+  let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const off of offsets) xref += off.toString().padStart(10, '0') + ' 00000 n \n';
   xref += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
 
   return concatBytes(header, ...wrappedObjs, s(xref));
