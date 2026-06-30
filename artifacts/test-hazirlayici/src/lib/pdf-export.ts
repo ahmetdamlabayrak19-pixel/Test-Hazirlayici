@@ -19,7 +19,7 @@ const COL_GAP = Math.round(5 * MM);
 const COL_W = Math.round((PAGE_W - 2 * MARGIN - COL_GAP) / 2);
 const TOPIC_BOX_H = Math.round(12 * MM);
 const TOPIC_FONT = Math.round(8 * MM / (25.4 / 72)); // ~8pt in px
-const PAGE_NUM_FONT = Math.round(6 * MM / (25.4 / 72));
+const PAGE_NUM_FONT = Math.round(3 * MM / (25.4 / 72));
 const Q_NUM_FONT = Math.round(7 * MM / (25.4 / 72));
 const PAGE_BOTTOM_RESERVE = Math.round(10 * MM); // sayfa numarası için
 
