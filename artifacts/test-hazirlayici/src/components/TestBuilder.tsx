@@ -104,7 +104,7 @@ export default function TestBuilder({
           </div>
           <Slider
             min={0}
-            max={20}
+            max={80}
             step={1}
             value={[questionGapMm]}
             onValueChange={([v]) => onQuestionGapChange(v)}
@@ -112,7 +112,7 @@ export default function TestBuilder({
           />
           <div className="flex justify-between text-xs text-slate-400 mt-1">
             <span>0 mm (sıkışık)</span>
-            <span>20 mm (geniş)</span>
+            <span>80 mm (geniş)</span>
           </div>
         </div>
 
