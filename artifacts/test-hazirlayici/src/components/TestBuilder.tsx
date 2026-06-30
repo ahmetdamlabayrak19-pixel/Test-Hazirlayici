@@ -1,27 +1,41 @@
 import { useState } from 'react';
 import { Button } from './ui/button';
-import { generateTestPdf } from '@/lib/pdf-export';
-import type { Question, HeaderConfig } from '@/lib/db';
-import { FileDown, Eye, Printer } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { RadioGroup, RadioGroupItem } from './ui/radio-group';
+import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { generateTestPdf } from '@/lib/pdf-export';
+import type { Question } from '@/lib/db';
+import { FileDown, Eye, Printer, Settings2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { db } from '@/lib/db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useToast } from '@/hooks/use-toast';
+import TemplateEditorModal from './TemplateEditorModal';
 
 interface TestBuilderProps {
   questions: Question[];
-  headerConfig: HeaderConfig;
+  topicText: string;
+  accentColor: string;
   templateId?: number;
-  templateUsage: 'first' | 'all' | 'none';
-  onTemplateChange: (id?: number, usage?: 'first' | 'all' | 'none') => void;
+  onTopicTextChange: (v: string) => void;
+  onAccentColorChange: (v: string) => void;
+  onTemplateChange: (id?: number) => void;
 }
 
-export default function TestBuilder({ questions, headerConfig, templateId, templateUsage, onTemplateChange }: TestBuilderProps) {
+export default function TestBuilder({
+  questions,
+  topicText,
+  accentColor,
+  templateId,
+  onTopicTextChange,
+  onAccentColorChange,
+  onTemplateChange,
+}: TestBuilderProps) {
   const templates = useLiveQuery(() => db.templates.toArray());
   const [isGenerating, setIsGenerating] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState(false);
   const { toast } = useToast();
+
+  const selectedTemplate = templates?.find(t => t.id === templateId);
 
   const run = async (action: 'download' | 'preview' | 'print') => {
     if (questions.length === 0) {
@@ -30,12 +44,12 @@ export default function TestBuilder({ questions, headerConfig, templateId, templ
     }
     setIsGenerating(true);
     try {
-      const template = templates?.find(t => t.id === templateId);
       await generateTestPdf({
         questions,
-        headerConfig,
-        templateDataUrl: template?.imageDataUrl,
-        templateUsage,
+        topicText,
+        accentColor,
+        templateDataUrl: selectedTemplate?.imageDataUrl,
+        templateLayout: selectedTemplate?.layout,
       }, action);
     } catch (err) {
       console.error(err);
@@ -47,15 +61,44 @@ export default function TestBuilder({ questions, headerConfig, templateId, templ
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
-      <div className="p-4 border-b bg-white flex flex-col gap-4">
-        <div className="flex flex-wrap gap-4 items-end">
-          <div className="flex-1 min-w-[200px]">
-            <Label className="mb-2 block text-sm font-medium">Şablon Seçimi</Label>
+      {/* Controls */}
+      <div className="p-4 border-b bg-white flex flex-col gap-4 shrink-0">
+
+        {/* Row 1: Topic text + color */}
+        <div className="flex gap-3 items-end flex-wrap">
+          <div className="flex-1 min-w-[180px]">
+            <Label className="mb-1.5 block text-sm font-medium">Konu Başlığı</Label>
+            <Input
+              value={topicText}
+              onChange={e => onTopicTextChange(e.target.value)}
+              placeholder="ör. KESİRLERDE TOPLAMA"
+              className="font-medium"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-sm font-medium">Renk</Label>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={accentColor}
+                onChange={e => onAccentColorChange(e.target.value)}
+                className="w-9 h-9 rounded cursor-pointer border border-slate-200 p-0.5"
+                title="Konu kutusu ve çizgi rengi"
+              />
+              <span className="text-xs text-slate-400 font-mono">{accentColor}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Row 2: Template */}
+        <div className="flex gap-3 items-end flex-wrap">
+          <div className="flex-1 min-w-[160px]">
+            <Label className="mb-1.5 block text-sm font-medium">İlk Sayfa Şablonu</Label>
             <Select
               value={templateId ? templateId.toString() : 'none'}
-              onValueChange={(val) => onTemplateChange(val === 'none' ? undefined : parseInt(val), templateUsage)}
+              onValueChange={val => onTemplateChange(val === 'none' ? undefined : parseInt(val))}
             >
-              <SelectTrigger data-testid="select-template">
+              <SelectTrigger>
                 <SelectValue placeholder="Şablon seçin..." />
               </SelectTrigger>
               <SelectContent>
@@ -67,34 +110,40 @@ export default function TestBuilder({ questions, headerConfig, templateId, templ
             </Select>
           </div>
 
-          {templateId && (
-            <div className="min-w-[220px]">
-              <Label className="mb-2 block text-sm font-medium">Şablon Kullanımı</Label>
-              <RadioGroup
-                value={templateUsage}
-                onValueChange={(val) => onTemplateChange(templateId, val as 'first' | 'all')}
-                className="flex items-center gap-4"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="first" id="u-first" />
-                  <Label htmlFor="u-first">İlk sayfada</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="all" id="u-all" />
-                  <Label htmlFor="u-all">Tüm sayfalarda</Label>
-                </div>
-              </RadioGroup>
-            </div>
+          {selectedTemplate && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setEditingTemplate(true)}
+              className="h-9"
+            >
+              <Settings2 className="w-4 h-4 mr-1.5" />
+              Şablonu Düzenle
+            </Button>
           )}
         </div>
 
-        <div className="flex items-center gap-2 pt-2 border-t">
+        {/* Info about template layout */}
+        {selectedTemplate && (
+          <div className="text-xs rounded-md bg-blue-50 border border-blue-100 px-3 py-2 text-blue-700 space-y-0.5">
+            {selectedTemplate.layout?.topicRect
+              ? <p>✓ Konu alanı tanımlı — başlık şablona yazılacak</p>
+              : <p>⚠ Konu alanı tanımlanmadı — "Şablonu Düzenle" ile tanımlayın</p>
+            }
+            {selectedTemplate.layout?.questionStartY !== undefined
+              ? <p>✓ Soru başlangıç çizgisi tanımlı</p>
+              : <p>⚠ Başlangıç çizgisi tanımlanmadı — sorular sayfa başından başlar</p>
+            }
+          </div>
+        )}
+
+        {/* PDF actions */}
+        <div className="flex items-center gap-2 pt-1 border-t">
           <Button
             onClick={() => run('preview')}
             disabled={questions.length === 0 || isGenerating}
             variant="outline"
             className="flex-1"
-            data-testid="button-preview"
           >
             <Eye className="w-4 h-4 mr-2" />
             Önizle
@@ -103,7 +152,6 @@ export default function TestBuilder({ questions, headerConfig, templateId, templ
             onClick={() => run('download')}
             disabled={questions.length === 0 || isGenerating}
             className="flex-1"
-            data-testid="button-download"
           >
             <FileDown className="w-4 h-4 mr-2" />
             {isGenerating ? 'Oluşturuluyor...' : 'PDF İndir'}
@@ -114,56 +162,75 @@ export default function TestBuilder({ questions, headerConfig, templateId, templ
             variant="secondary"
             size="icon"
             title="Yazdır"
-            data-testid="button-print"
           >
             <Printer className="w-4 h-4" />
           </Button>
         </div>
       </div>
 
+      {/* Preview area */}
       <div className="flex-1 overflow-auto p-6 flex flex-col items-center gap-4 bg-slate-200">
         {questions.length === 0 ? (
-          <div className="bg-white border rounded-lg p-12 text-center text-slate-500 shadow-sm w-full max-w-2xl">
+          <div className="bg-white border rounded-lg p-12 text-center text-slate-500 shadow-sm w-full max-w-xl">
             <p className="text-base font-medium">Önizleme için soru ekleyin</p>
             <p className="text-sm mt-1 text-slate-400">PDF Görüntüleyici sekmesinden soru kırpın</p>
           </div>
         ) : (
-          <div className="bg-white border rounded-lg shadow-sm w-full max-w-2xl" style={{ aspectRatio: '1/1.414' }}>
-            <div className="p-6 h-full flex flex-col">
-              {headerConfig.enabled && (
-                <div className="border-b pb-3 mb-4">
-                  {headerConfig.testTitle && (
-                    <h2 className="text-center font-bold text-lg mb-2">{headerConfig.testTitle}</h2>
-                  )}
-                  <div className="flex gap-4 text-sm text-slate-600 flex-wrap">
-                    {headerConfig.showName && <span>Ad Soyad: ___________________</span>}
-                    {headerConfig.showClass && <span>Sınıf: _______</span>}
-                    {headerConfig.showNumber && <span>No: _______</span>}
-                    {headerConfig.showDate && <span>Tarih: __ / __ / ______</span>}
-                  </div>
-                </div>
-              )}
-              <div className="columns-2 gap-4 flex-1">
-                {questions.map((q, i) => (
-                  <div key={q.id} className="break-inside-avoid mb-3">
-                    <div className="flex items-start gap-1">
-                      <span className="text-xs font-bold shrink-0 mt-1">{i + 1}.</span>
-                      <img
-                        src={q.imageDataUrl}
-                        alt={`Soru ${i + 1}`}
-                        className="w-full h-auto block"
-                      />
-                    </div>
-                  </div>
-                ))}
+          <div
+            className="bg-white border rounded-lg shadow-sm w-full max-w-xl overflow-hidden"
+            style={{ aspectRatio: '1/1.414' }}
+          >
+            <div className="p-4 h-full flex flex-col text-[10px]">
+              {/* Topic box preview */}
+              <div
+                className="border-2 rounded text-center py-1.5 mb-3 font-bold tracking-wide"
+                style={{ borderColor: accentColor, color: accentColor }}
+              >
+                {topicText || 'KONU BAŞLIĞI'}
               </div>
+
+              {/* 2-column questions */}
+              <div className="flex flex-1 gap-3 overflow-hidden relative">
+                {/* Center divider */}
+                <div
+                  className="absolute left-1/2 top-0 bottom-0 w-px"
+                  style={{ backgroundColor: accentColor }}
+                />
+                <div className="flex-1 overflow-hidden space-y-1">
+                  {questions.filter((_, i) => i % 2 === 0).map((q, i) => (
+                    <div key={q.id} className="flex items-start gap-0.5">
+                      <span className="font-bold shrink-0">{i * 2 + 1}.</span>
+                      <img src={q.imageDataUrl} alt="" className="w-full h-auto" />
+                    </div>
+                  ))}
+                </div>
+                <div className="flex-1 overflow-hidden space-y-1">
+                  {questions.filter((_, i) => i % 2 === 1).map((q, i) => (
+                    <div key={q.id} className="flex items-start gap-0.5">
+                      <span className="font-bold shrink-0">{i * 2 + 2}.</span>
+                      <img src={q.imageDataUrl} alt="" className="w-full h-auto" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Page number */}
+              <div className="text-center mt-1" style={{ color: accentColor, fontSize: '0.55rem' }}>1</div>
             </div>
           </div>
         )}
         <p className="text-xs text-slate-400">
-          {questions.length} soru — PDF oluşturmak için "PDF İndir" butonuna tıklayın
+          {questions.length} soru — PDF için "PDF İndir" veya "Önizle"ye tıklayın
         </p>
       </div>
+
+      {/* Template editor modal */}
+      {editingTemplate && selectedTemplate && (
+        <TemplateEditorModal
+          template={selectedTemplate}
+          onClose={() => setEditingTemplate(false)}
+        />
+      )}
     </div>
   );
 }

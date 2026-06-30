@@ -5,29 +5,21 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { db, Question, HeaderConfig, TestProject } from '@/lib/db';
+import { db, Question, TestProject } from '@/lib/db';
 import PdfViewer from '@/components/PdfViewer';
 import QuestionPool from '@/components/QuestionPool';
 import TestBuilder from '@/components/TestBuilder';
-import HeaderConfigPanel from '@/components/HeaderConfig';
 
 export default function TestWorkspacePage() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const [projectName, setProjectName] = useState('İsimsiz Test');
+  const [projectName, setProjectName] = useState('İsimsiz Çalışma Kağıdı');
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [headerConfig, setHeaderConfig] = useState<HeaderConfig>({
-    enabled: true,
-    showName: true,
-    showClass: true,
-    showNumber: true,
-    showDate: true,
-    testTitle: '',
-  });
+  const [topicText, setTopicText] = useState('');
+  const [accentColor, setAccentColor] = useState('#2563eb');
   const [templateId, setTemplateId] = useState<number | undefined>();
-  const [templateUsage, setTemplateUsage] = useState<'first' | 'all' | 'none'>('none');
 
   useEffect(() => {
     if (id && id !== 'new') {
@@ -35,9 +27,9 @@ export default function TestWorkspacePage() {
         if (project) {
           setProjectName(project.name);
           setQuestions(project.questions || []);
-          if (project.headerConfig) setHeaderConfig(project.headerConfig);
+          setTopicText(project.topicText ?? '');
+          setAccentColor(project.accentColor ?? '#2563eb');
           setTemplateId(project.templateId);
-          setTemplateUsage(project.templateUsage || 'none');
         }
       });
     }
@@ -48,24 +40,40 @@ export default function TestWorkspacePage() {
       const project: TestProject = {
         name: projectName,
         questions,
-        headerConfig,
+        topicText,
+        accentColor,
         templateId,
-        templateUsage,
         updatedAt: new Date(),
-        createdAt: new Date(), // Will be overwritten if updating
+        createdAt: new Date(),
+        headerConfig: {
+          enabled: false,
+          showName: false,
+          showClass: false,
+          showNumber: false,
+          showDate: false,
+          testTitle: topicText,
+        },
       };
 
       if (id && id !== 'new') {
-        await db.testProjects.update(parseInt(id), project);
-        toast({ title: 'Başarılı', description: 'Test kaydedildi.' });
+        await db.testProjects.update(parseInt(id), {
+          name: project.name,
+          questions: project.questions,
+          topicText: project.topicText,
+          accentColor: project.accentColor,
+          templateId: project.templateId,
+          updatedAt: project.updatedAt,
+          headerConfig: project.headerConfig,
+        });
+        toast({ title: 'Başarılı', description: 'Kaydedildi.' });
       } else {
         const newId = await db.testProjects.add(project);
-        toast({ title: 'Başarılı', description: 'Yeni test oluşturuldu.' });
+        toast({ title: 'Başarılı', description: 'Yeni proje oluşturuldu.' });
         setLocation(`/tests/${newId}`);
       }
     } catch (e) {
       console.error(e);
-      toast({ title: 'Hata', description: 'Test kaydedilemedi.', variant: 'destructive' });
+      toast({ title: 'Hata', description: 'Kaydedilemedi.', variant: 'destructive' });
     }
   };
 
@@ -77,7 +85,7 @@ export default function TestWorkspacePage() {
       height,
       order: questions.length,
     };
-    setQuestions([...questions, newQuestion]);
+    setQuestions(prev => [...prev, newQuestion]);
   };
 
   return (
@@ -87,9 +95,9 @@ export default function TestWorkspacePage() {
           <Button variant="ghost" size="icon" onClick={() => setLocation('/')}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <Input 
-            value={projectName} 
-            onChange={(e) => setProjectName(e.target.value)}
+          <Input
+            value={projectName}
+            onChange={e => setProjectName(e.target.value)}
             className="w-64 font-semibold text-lg border-transparent hover:border-slate-200 focus-visible:ring-1"
           />
         </div>
@@ -104,25 +112,25 @@ export default function TestWorkspacePage() {
 
       <main className="flex-1 overflow-hidden flex">
         <Tabs defaultValue="viewer" className="w-full flex flex-col">
-          <div className="px-4 pt-2 bg-white border-b">
+          <div className="px-4 pt-2 bg-white border-b shrink-0">
             <TabsList className="w-full justify-start h-auto p-0 bg-transparent gap-4">
-              <TabsTrigger 
-                value="viewer" 
+              <TabsTrigger
+                value="viewer"
                 className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-2 py-2"
               >
                 PDF Görüntüleyici
               </TabsTrigger>
-              <TabsTrigger 
+              <TabsTrigger
                 value="pool"
                 className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-2 py-2"
               >
                 Soru Havuzu ({questions.length})
               </TabsTrigger>
-              <TabsTrigger 
+              <TabsTrigger
                 value="builder"
                 className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-2 py-2"
               >
-                Test Oluşturucu
+                Çalışma Kağıdı Oluştur
               </TabsTrigger>
             </TabsList>
           </div>
@@ -131,27 +139,21 @@ export default function TestWorkspacePage() {
             <TabsContent value="viewer" className="m-0 h-full p-4">
               <PdfViewer onQuestionCropped={handleQuestionCropped} />
             </TabsContent>
-            
+
             <TabsContent value="pool" className="m-0 h-full">
               <QuestionPool questions={questions} setQuestions={setQuestions} />
             </TabsContent>
-            
-            <TabsContent value="builder" className="m-0 h-full flex flex-col md:flex-row p-4 gap-4">
-              <div className="w-full md:w-80 shrink-0 flex flex-col gap-4 overflow-y-auto">
-                <HeaderConfigPanel config={headerConfig} onChange={setHeaderConfig} />
-              </div>
-              <div className="flex-1 overflow-hidden border rounded-md shadow-sm">
-                <TestBuilder 
-                  questions={questions} 
-                  headerConfig={headerConfig} 
-                  templateId={templateId}
-                  templateUsage={templateUsage}
-                  onTemplateChange={(id, usage) => {
-                    setTemplateId(id);
-                    if (usage) setTemplateUsage(usage);
-                  }}
-                />
-              </div>
+
+            <TabsContent value="builder" className="m-0 h-full">
+              <TestBuilder
+                questions={questions}
+                topicText={topicText}
+                accentColor={accentColor}
+                templateId={templateId}
+                onTopicTextChange={setTopicText}
+                onAccentColorChange={setAccentColor}
+                onTemplateChange={setTemplateId}
+              />
             </TabsContent>
           </div>
         </Tabs>

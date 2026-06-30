@@ -1,8 +1,13 @@
 import Dexie, { type Table } from 'dexie';
 
+export interface TemplateLayout {
+  topicRect?: { x: number; y: number; w: number; h: number };
+  questionStartY?: number;
+}
+
 export interface Question {
-  id: string; // uuid
-  imageDataUrl: string; // base64 PNG
+  id: string;
+  imageDataUrl: string;
   width: number;
   height: number;
   order: number;
@@ -25,13 +30,15 @@ export interface TestProject {
   questions: Question[];
   headerConfig: HeaderConfig;
   templateId?: number;
-  templateUsage: 'first' | 'all' | 'none';
+  topicText?: string;
+  accentColor?: string;
 }
 
 export interface Template {
   id?: number;
   name: string;
   imageDataUrl: string;
+  layout?: TemplateLayout;
   createdAt: Date;
 }
 
@@ -42,6 +49,10 @@ export class AppDatabase extends Dexie {
   constructor() {
     super('TestHazirlayiciDB');
     this.version(1).stores({
+      testProjects: '++id, name, updatedAt, createdAt',
+      templates: '++id, name, createdAt',
+    });
+    this.version(2).stores({
       testProjects: '++id, name, updatedAt, createdAt',
       templates: '++id, name, createdAt',
     });

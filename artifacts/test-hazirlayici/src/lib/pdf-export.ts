@@ -1,10 +1,11 @@
-import type { Question, HeaderConfig } from './db';
+import type { Question, TemplateLayout } from './db';
 
 export interface ExportConfig {
   questions: Question[];
-  headerConfig: HeaderConfig;
+  topicText: string;
+  accentColor: string;
   templateDataUrl?: string;
-  templateUsage: 'first' | 'all' | 'none';
+  templateLayout?: TemplateLayout;
 }
 
 const DPI = 150;
@@ -15,6 +16,10 @@ const MARGIN = Math.round(10 * MM);
 const GAP = Math.round(5 * MM);
 const COL_W = Math.round((PAGE_W - 2 * MARGIN - GAP) / 2);
 const ROW_GAP = Math.round(3 * MM);
+const TOPIC_BOX_H = Math.round(14 * MM);
+const TOPIC_FONT = Math.round(10 * MM / 4);
+const PAGE_NUM_FONT = Math.round(7 * MM / 4);
+const Q_NUM_FONT = Math.round(8 * MM / 4);
 
 function loadImg(src: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {
@@ -33,107 +38,215 @@ function concatBytes(...arrays: Uint8Array[]): Uint8Array {
   return out;
 }
 
+function roundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number, r: number
+) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+}
+
+function drawPageNumber(ctx: CanvasRenderingContext2D, num: number, color: string) {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.font = `${PAGE_NUM_FONT}px Arial, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(`${num}`, PAGE_W / 2, PAGE_H - Math.round(3 * MM));
+  ctx.restore();
+}
+
+function placeQuestion(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  q: Question,
+  qIndex: number,
+  col: number,
+  cY: number
+): number {
+  const rH = Math.round(COL_W * (q.height / q.width));
+  const x = MARGIN + col * (COL_W + GAP);
+  const numStr = `${qIndex + 1}.`;
+  ctx.save();
+  ctx.font = `bold ${Q_NUM_FONT}px Arial, sans-serif`;
+  ctx.fillStyle = '#000';
+  ctx.textAlign = 'left';
+  const numW = ctx.measureText(numStr).width + 4;
+  ctx.fillText(numStr, x, cY + Math.round(5 * MM / 4));
+  ctx.drawImage(img, x + numW, cY, COL_W - numW, rH);
+  ctx.restore();
+  return rH;
+}
+
 async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
-  const { questions, headerConfig, templateDataUrl, templateUsage } = config;
+  const { questions, topicText, accentColor, templateDataUrl, templateLayout } = config;
   const pages: HTMLCanvasElement[] = [];
-  let ctx!: CanvasRenderingContext2D;
-  let col1Y = MARGIN, col2Y = MARGIN;
-  let pageIdx = 0;
 
   let templateImg: HTMLImageElement | null = null;
   if (templateDataUrl) {
     try { templateImg = await loadImg(templateDataUrl); } catch { /* ignore */ }
   }
 
-  async function newPage() {
-    const cv = document.createElement('canvas');
-    cv.width = PAGE_W; cv.height = PAGE_H;
-    const c = cv.getContext('2d')!;
-    c.fillStyle = '#fff';
-    c.fillRect(0, 0, PAGE_W, PAGE_H);
-    if (templateImg) {
-      const draw = templateUsage === 'all' || (templateUsage === 'first' && pageIdx === 0);
-      if (draw) c.drawImage(templateImg, 0, 0, PAGE_W, PAGE_H);
-    }
-    pages.push(cv);
-    pageIdx++;
-    col1Y = MARGIN; col2Y = MARGIN;
-    ctx = c;
-    return c;
+  const qImgs = await Promise.all(questions.map(q => loadImg(q.imageDataUrl)));
+
+  const bottomLimit = PAGE_H - MARGIN - Math.round(8 * MM);
+
+  // ── PAGE 1 ────────────────────────────────────────────────────────────────
+  const cv1 = document.createElement('canvas');
+  cv1.width = PAGE_W; cv1.height = PAGE_H;
+  const ctx1 = cv1.getContext('2d')!;
+
+  ctx1.fillStyle = '#fff';
+  ctx1.fillRect(0, 0, PAGE_W, PAGE_H);
+
+  if (templateImg) {
+    ctx1.drawImage(templateImg, 0, 0, PAGE_W, PAGE_H);
   }
 
-  await newPage();
-
-  if (headerConfig.enabled) {
-    let hy = MARGIN;
-    if (headerConfig.testTitle) {
-      ctx.font = `bold ${Math.round(14 * MM / 4)}px Arial, sans-serif`;
-      ctx.fillStyle = '#000';
-      ctx.textAlign = 'center';
-      ctx.fillText(headerConfig.testTitle, PAGE_W / 2, hy + Math.round(6 * MM / 4));
-      hy += Math.round(10 * MM / 4);
-    }
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(MARGIN, hy + 2); ctx.lineTo(PAGE_W - MARGIN, hy + 2);
-    ctx.stroke();
-    hy += Math.round(4 * MM / 4);
-
-    const fields: string[] = [];
-    if (headerConfig.showName) fields.push('Ad Soyad: _____________________');
-    if (headerConfig.showClass) fields.push('Sınıf: _______');
-    if (headerConfig.showNumber) fields.push('No: _______');
-    if (headerConfig.showDate) fields.push('Tarih: __ / __ / ______');
-
-    if (fields.length > 0) {
-      ctx.font = `${Math.round(10 * MM / 4)}px Arial, sans-serif`;
-      ctx.textAlign = 'left';
-      const colSize = (PAGE_W - 2 * MARGIN) / fields.length;
-      for (let f = 0; f < fields.length; f++) {
-        ctx.fillStyle = '#000';
-        ctx.fillText(fields[f], MARGIN + f * colSize, hy + Math.round(5 * MM / 4));
-      }
-      hy += Math.round(10 * MM / 4);
-    }
-    ctx.strokeStyle = '#aaa';
-    ctx.beginPath();
-    ctx.moveTo(MARGIN, hy); ctx.lineTo(PAGE_W - MARGIN, hy);
-    ctx.stroke();
-    hy += Math.round(4 * MM / 4);
-    col1Y = hy; col2Y = hy;
+  // Topic text in defined rect
+  if (templateLayout?.topicRect && topicText) {
+    const { x, y, w, h } = templateLayout.topicRect;
+    const rx = x * PAGE_W, ry = y * PAGE_H, rw = w * PAGE_W, rh = h * PAGE_H;
+    ctx1.save();
+    const fontSize = Math.max(Math.round(rh * 0.35), Math.round(6 * MM / 4));
+    ctx1.font = `bold ${fontSize}px Arial, sans-serif`;
+    ctx1.fillStyle = accentColor;
+    ctx1.textAlign = 'center';
+    ctx1.textBaseline = 'middle';
+    ctx1.fillText(topicText, rx + rw / 2, ry + rh / 2, rw * 0.95);
+    ctx1.restore();
   }
 
-  for (let qi = 0; qi < questions.length; qi++) {
+  // Question start Y
+  const startY = templateLayout?.questionStartY !== undefined
+    ? Math.round(templateLayout.questionStartY * PAGE_H)
+    : MARGIN;
+
+  // Center divider
+  const dvX = Math.round(PAGE_W / 2);
+  ctx1.save();
+  ctx1.strokeStyle = accentColor;
+  ctx1.lineWidth = 1.5;
+  ctx1.beginPath();
+  ctx1.moveTo(dvX, startY);
+  ctx1.lineTo(dvX, bottomLimit);
+  ctx1.stroke();
+  ctx1.restore();
+
+  let col1Y = startY, col2Y = startY;
+  let qi = 0;
+
+  // Place questions on page 1
+  outer1: while (qi < questions.length) {
     const q = questions[qi];
-    const img = await loadImg(q.imageDataUrl);
+    const img = qImgs[qi];
     const rH = Math.round(COL_W * (q.height / q.width));
 
     let col = col1Y <= col2Y ? 0 : 1;
     let cY = col === 0 ? col1Y : col2Y;
 
-    if (cY + rH > PAGE_H - MARGIN) {
-      const otherY = col === 0 ? col2Y : col1Y;
-      if (otherY + rH > PAGE_H - MARGIN) {
-        await newPage();
-        col = 0; cY = MARGIN;
+    if (cY + rH > bottomLimit) {
+      const otherCol = 1 - col;
+      const otherY = otherCol === 0 ? col1Y : col2Y;
+      if (otherY + rH <= bottomLimit) {
+        col = otherCol;
+        cY = otherY;
       } else {
-        col = 1 - col;
-        cY = col === 0 ? col1Y : col2Y;
+        break outer1;
       }
     }
 
-    const x = MARGIN + col * (COL_W + GAP);
-    const numStr = `${qi + 1}.`;
-    ctx.font = `bold ${Math.round(8 * MM / 4)}px Arial, sans-serif`;
-    ctx.fillStyle = '#000';
-    ctx.textAlign = 'left';
-    const numW = ctx.measureText(numStr).width + 4;
-    ctx.fillText(numStr, x, cY + Math.round(5 * MM / 4));
-    ctx.drawImage(img, x + numW, cY, COL_W - numW, rH);
-
+    placeQuestion(ctx1, img, q, qi, col, cY);
     if (col === 0) col1Y = cY + rH + ROW_GAP;
     else col2Y = cY + rH + ROW_GAP;
+    qi++;
+  }
+
+  drawPageNumber(ctx1, 1, accentColor);
+  pages.push(cv1);
+
+  // ── SUBSEQUENT PAGES ─────────────────────────────────────────────────────
+  let pageNum = 2;
+  while (qi < questions.length) {
+    const cv = document.createElement('canvas');
+    cv.width = PAGE_W; cv.height = PAGE_H;
+    const ctx = cv.getContext('2d')!;
+
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, PAGE_W, PAGE_H);
+
+    // Topic box
+    const boxY = MARGIN;
+    const radius = Math.round(3 * MM);
+    ctx.save();
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 2;
+    roundedRect(ctx, MARGIN, boxY, PAGE_W - 2 * MARGIN, TOPIC_BOX_H, radius);
+    ctx.stroke();
+    ctx.restore();
+
+    if (topicText) {
+      ctx.save();
+      ctx.fillStyle = accentColor;
+      ctx.font = `bold ${TOPIC_FONT}px Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(topicText, PAGE_W / 2, boxY + TOPIC_BOX_H / 2, PAGE_W - 2 * MARGIN - Math.round(6 * MM));
+      ctx.restore();
+    }
+
+    const contentY = boxY + TOPIC_BOX_H + Math.round(5 * MM);
+
+    // Center divider
+    ctx.save();
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(dvX, contentY);
+    ctx.lineTo(dvX, bottomLimit);
+    ctx.stroke();
+    ctx.restore();
+
+    col1Y = contentY;
+    col2Y = contentY;
+
+    outerN: while (qi < questions.length) {
+      const q = questions[qi];
+      const img = qImgs[qi];
+      const rH = Math.round(COL_W * (q.height / q.width));
+
+      let col = col1Y <= col2Y ? 0 : 1;
+      let cY = col === 0 ? col1Y : col2Y;
+
+      if (cY + rH > bottomLimit) {
+        const otherCol = 1 - col;
+        const otherY = otherCol === 0 ? col1Y : col2Y;
+        if (otherY + rH <= bottomLimit) {
+          col = otherCol;
+          cY = otherY;
+        } else {
+          break outerN;
+        }
+      }
+
+      placeQuestion(ctx, img, q, qi, col, cY);
+      if (col === 0) col1Y = cY + rH + ROW_GAP;
+      else col2Y = cY + rH + ROW_GAP;
+      qi++;
+    }
+
+    drawPageNumber(ctx, pageNum, accentColor);
+    pages.push(cv);
+    pageNum++;
   }
 
   return pages;
@@ -229,13 +342,13 @@ export async function generateTestPdf(
   const pages = await buildPages(config);
   const jpegs = pages.map(canvasToJpeg);
   const pdfBytes = buildRawPdf(jpegs);
-  const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+  const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
   const url = URL.createObjectURL(blob);
 
   if (action === 'download') {
     const a = document.createElement('a');
     a.href = url;
-    a.download = (config.headerConfig.testTitle || 'test') + '.pdf';
+    a.download = (config.topicText || 'calisma-kagidi') + '.pdf';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
