@@ -210,7 +210,7 @@ export default function TestBuilder({
               {/* Konu kutusu */}
               <div
                 className="border-2 rounded text-center py-1.5 mb-3 font-bold tracking-wide shrink-0"
-                style={{ borderColor: accentColor, color: accentColor }}
+                style={{ borderColor: accentColor, color: '#000000' }}
               >
                 {topicText || 'KONU BAŞLIĞI'}
               </div>
@@ -238,7 +238,7 @@ export default function TestBuilder({
                 </div>
               </div>
               {/* Sayfa no */}
-              <div className="text-center mt-1 shrink-0" style={{ color: accentColor, fontSize: '0.55rem' }}>1</div>
+              <div className="text-center mt-1 shrink-0" style={{ color: '#000000', fontSize: '0.55rem' }}>1</div>
             </div>
           </div>
         )}

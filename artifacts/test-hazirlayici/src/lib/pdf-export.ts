@@ -19,8 +19,8 @@ const COL_GAP = Math.round(5 * MM);
 const COL_W = Math.round((PAGE_W - 2 * MARGIN - COL_GAP) / 2);
 const TOPIC_BOX_H = Math.round(12 * MM);
 const TOPIC_FONT = Math.round(8 * MM / (25.4 / 72)); // ~8pt in px
-const PAGE_NUM_FONT = Math.round(2 * MM / (25.4 / 72));
-const Q_NUM_FONT = Math.round(7 * MM / (25.4 / 72));
+const PAGE_NUM_FONT = Math.round(1.5 * MM / (25.4 / 72));
+const Q_NUM_FONT = Math.round(1.3 * MM / (25.4 / 72));
 const PAGE_BOTTOM_RESERVE = Math.round(10 * MM); // sayfa numarası için
 
 function loadImg(src: string): Promise<HTMLImageElement> {
@@ -79,7 +79,7 @@ function drawContain(
 
 function drawPageNumber(ctx: CanvasRenderingContext2D, num: number, color: string) {
   ctx.save();
-  ctx.fillStyle = color;
+  ctx.fillStyle = '#000000'; 
   ctx.font = `${PAGE_NUM_FONT}px Arial, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
@@ -118,9 +118,9 @@ async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
     const { x, y, w, h } = templateLayout.topicRect;
     const rx = x * PAGE_W, ry = y * PAGE_H, rw = w * PAGE_W, rh = h * PAGE_H;
     ctx1.save();
-    const fs = Math.max(Math.round(rh * 0.38), Math.round(5 * MM));
+    const fs = Math.max(Math.round(rh * 0.45), Math.round(6 * MM));
     ctx1.font = `bold ${fs}px Arial, sans-serif`;
-    ctx1.fillStyle = accentColor;
+    ctx1.fillStyle = '#000000';
     ctx1.textAlign = 'center';
     ctx1.textBaseline = 'middle';
     ctx1.fillText(topicText, rx + rw / 2, ry + rh / 2, rw * 0.92);
@@ -189,11 +189,15 @@ async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
     roundedRect(ctx, MARGIN, boxY, PAGE_W - 2 * MARGIN, TOPIC_BOX_H, r);
     ctx.stroke();
     if (topicText) {
-      ctx.fillStyle = accentColor;
-      ctx.font = `bold ${TOPIC_FONT}px Arial, sans-serif`;
-      ctx.textAlign = 'center';
+      ctx.fillStyle = '#000000';
+      ctx.font = `bold ${Math.round(TOPIC_FONT * 0.15)}px Arial, sans-serif`;
+      ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText(topicText, PAGE_W / 2, boxY + TOPIC_BOX_H / 2, PAGE_W - 2 * MARGIN - Math.round(6 * MM));
+      ctx.fillText(
+        topicText,
+        MARGIN + Math.round(4 * MM),
+        boxY + TOPIC_BOX_H / 2
+      );
     }
     ctx.restore();
 
