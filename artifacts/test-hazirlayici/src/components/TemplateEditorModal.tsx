@@ -18,23 +18,41 @@ const CANVAS_H = 1131;
 export default function TemplateEditorModal({ template, onClose }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
-  const [tool, setTool] = useState<Tool>(null);
+  const toolRef = useRef<Tool>(null);
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const dragCurrentRef = useRef({ x: 0, y: 0 });
+  const layoutRef = useRef<TemplateLayout>(template.layout ?? {});
+
+  const [tool, setToolState] = useState<Tool>(null);
   const [layout, setLayout] = useState<TemplateLayout>(template.layout ?? {});
-  const [dragging, setDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [dragCurrent, setDragCurrent] = useState({ x: 0, y: 0 });
-  const wasDraggingRef = useRef(false);
+  const [dragPreview, setDragPreview] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+
   const { toast } = useToast();
 
-  const getCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Keep refs in sync with state
+  const setTool = (t: Tool | ((prev: Tool) => Tool)) => {
+    const next = typeof t === 'function' ? t(toolRef.current) : t;
+    toolRef.current = next;
+    setToolState(next);
+  };
+
+  const updateLayout = useCallback((next: TemplateLayout) => {
+    layoutRef.current = next;
+    setLayout(next);
+  }, []);
+
+  // Canvas coordinate helper – uses getBoundingClientRect (display size → 0-1 ratio)
+  const getCoords = (e: MouseEvent | React.MouseEvent) => {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
     return {
-      x: (e.clientX - rect.left) / rect.width,
-      y: (e.clientY - rect.top) / rect.height,
+      x: Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)),
+      y: Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height)),
     };
   };
 
+  // Draw everything on the canvas
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
     const img = imgRef.current;
@@ -52,9 +70,11 @@ export default function TemplateEditorModal({ template, onClose }: Props) {
       ctx.fillRect(0, 0, W, H);
     }
 
-    // Topic rect (saved)
-    if (layout.topicRect) {
-      const { x, y, w, h } = layout.topicRect;
+    const current = layoutRef.current;
+
+    // Saved topic rect
+    if (current.topicRect) {
+      const { x, y, w, h } = current.topicRect;
       ctx.save();
       ctx.strokeStyle = '#2563eb';
       ctx.lineWidth = 3;
@@ -69,9 +89,9 @@ export default function TemplateEditorModal({ template, onClose }: Props) {
       ctx.restore();
     }
 
-    // Question start line (saved)
-    if (layout.questionStartY !== undefined) {
-      const ly = layout.questionStartY * H;
+    // Saved question start line
+    if (current.questionStartY !== undefined) {
+      const ly = current.questionStartY * H;
       ctx.save();
       ctx.strokeStyle = '#dc2626';
       ctx.lineWidth = 2.5;
@@ -85,25 +105,33 @@ export default function TemplateEditorModal({ template, onClose }: Props) {
       ctx.font = `bold ${Math.round(H * 0.018)}px Arial`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'bottom';
-      ctx.fillText('▶ Soru başlangıç çizgisi', 6, ly - 2);
+      ctx.fillText('▶ Soru başlangıç çizgisi', 8, ly - 4);
       ctx.restore();
     }
+  }, []);
 
-    // Drag preview rect
-    if (dragging && tool === 'topic') {
-      const x = Math.min(dragStart.x, dragCurrent.x);
-      const y = Math.min(dragStart.y, dragCurrent.y);
-      const w = Math.abs(dragCurrent.x - dragStart.x);
-      const h = Math.abs(dragCurrent.y - dragStart.y);
+  // Draw drag preview separately on top (called via requestAnimationFrame)
+  const drawPreview = useCallback((preview: { x: number; y: number; w: number; h: number } | null) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d')!;
+    const W = canvas.width;
+    const H = canvas.height;
+
+    redraw();
+
+    if (preview) {
       ctx.save();
       ctx.strokeStyle = '#2563eb';
       ctx.lineWidth = 2;
       ctx.setLineDash([6, 4]);
-      ctx.strokeRect(x * W, y * H, w * W, h * H);
+      ctx.strokeRect(preview.x * W, preview.y * H, preview.w * W, preview.h * H);
+      ctx.fillStyle = 'rgba(37,99,235,0.08)';
+      ctx.fillRect(preview.x * W, preview.y * H, preview.w * W, preview.h * H);
       ctx.setLineDash([]);
       ctx.restore();
     }
-  }, [layout, dragging, dragStart, dragCurrent, tool]);
+  }, [redraw]);
 
   // Load image once
   useEffect(() => {
@@ -113,46 +141,82 @@ export default function TemplateEditorModal({ template, onClose }: Props) {
       redraw();
     };
     img.src = template.imageDataUrl;
-  }, [template.imageDataUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [template.imageDataUrl, redraw]);
 
+  // Re-draw when saved layout changes
   useEffect(() => {
     redraw();
-  }, [redraw]);
+  }, [layout, redraw]);
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (tool !== 'topic') return;
-    wasDraggingRef.current = false;
-    const coords = getCoords(e);
-    setDragStart(coords);
-    setDragCurrent(coords);
-    setDragging(true);
-  };
+  // Native event listeners on the canvas (avoid stale closure issues)
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!dragging || tool !== 'topic') return;
-    wasDraggingRef.current = true;
-    setDragCurrent(getCoords(e));
-  };
-
-  const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!dragging || tool !== 'topic') return;
-    const coords = getCoords(e);
-    const x = Math.min(dragStart.x, coords.x);
-    const y = Math.min(dragStart.y, coords.y);
-    const w = Math.abs(coords.x - dragStart.x);
-    const h = Math.abs(coords.y - dragStart.y);
-    if (w > 0.01 && h > 0.005) {
-      setLayout(prev => ({ ...prev, topicRect: { x, y, w, h } }));
-    }
-    setDragging(false);
-  };
-
-  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (tool === 'line') {
+    const onMouseDown = (e: MouseEvent) => {
+      if (toolRef.current !== 'topic') return;
+      e.preventDefault();
       const coords = getCoords(e);
-      setLayout(prev => ({ ...prev, questionStartY: coords.y }));
-    }
-  };
+      dragStartRef.current = coords;
+      dragCurrentRef.current = coords;
+      isDraggingRef.current = true;
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current || toolRef.current !== 'topic') return;
+      e.preventDefault();
+      const coords = getCoords(e);
+      dragCurrentRef.current = coords;
+
+      const x = Math.min(dragStartRef.current.x, coords.x);
+      const y = Math.min(dragStartRef.current.y, coords.y);
+      const w = Math.abs(coords.x - dragStartRef.current.x);
+      const h = Math.abs(coords.y - dragStartRef.current.y);
+
+      const preview = { x, y, w, h };
+      setDragPreview(preview);
+      drawPreview(preview);
+    };
+
+    const onMouseUp = (e: MouseEvent) => {
+      if (!isDraggingRef.current || toolRef.current !== 'topic') return;
+      isDraggingRef.current = false;
+      const coords = getCoords(e);
+
+      const x = Math.min(dragStartRef.current.x, coords.x);
+      const y = Math.min(dragStartRef.current.y, coords.y);
+      const w = Math.abs(coords.x - dragStartRef.current.x);
+      const h = Math.abs(coords.y - dragStartRef.current.y);
+
+      setDragPreview(null);
+
+      if (w > 0.01 && h > 0.005) {
+        const next = { ...layoutRef.current, topicRect: { x, y, w, h } };
+        updateLayout(next);
+      } else {
+        redraw();
+      }
+    };
+
+    const onClick = (e: MouseEvent) => {
+      if (toolRef.current !== 'line') return;
+      const coords = getCoords(e);
+      const next = { ...layoutRef.current, questionStartY: coords.y };
+      updateLayout(next);
+    };
+
+    canvas.addEventListener('mousedown', onMouseDown);
+    canvas.addEventListener('mousemove', onMouseMove);
+    canvas.addEventListener('mouseup', onMouseUp);
+    canvas.addEventListener('click', onClick);
+
+    return () => {
+      canvas.removeEventListener('mousedown', onMouseDown);
+      canvas.removeEventListener('mousemove', onMouseMove);
+      canvas.removeEventListener('mouseup', onMouseUp);
+      canvas.removeEventListener('click', onClick);
+    };
+  }, [drawPreview, redraw, updateLayout]);
 
   const handleSave = async () => {
     try {
@@ -164,11 +228,19 @@ export default function TemplateEditorModal({ template, onClose }: Props) {
     }
   };
 
-  const toolHint = tool === 'topic'
-    ? '🖱️ Konu başlığının yazılacağı alanı sürükleyerek seçin'
-    : tool === 'line'
-      ? '🖱️ Soruların başlayacağı yatay çizgiyi tıklayarak belirleyin'
-      : 'Yukarıdan bir araç seçin, ardından şablon üzerinde işaretleme yapın';
+  const toolHint =
+    tool === 'topic'
+      ? '🖱️ Konu başlığının yazılacağı alanı sürükleyerek seçin'
+      : tool === 'line'
+        ? '🖱️ Soruların başlayacağı yatay çizgiyi tıklayarak belirleyin'
+        : 'Yukarıdan bir araç seçin, ardından şablon üzerinde işaretleme yapın';
+
+  const cursor =
+    tool === 'topic'
+      ? isDraggingRef.current || dragPreview ? 'crosshair' : 'crosshair'
+      : tool === 'line'
+        ? 'row-resize'
+        : 'default';
 
   return (
     <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
@@ -203,7 +275,11 @@ export default function TemplateEditorModal({ template, onClose }: Props) {
             <Button
               size="sm" variant="ghost"
               className="text-rose-500 hover:text-rose-700"
-              onClick={() => setLayout(p => ({ ...p, topicRect: undefined }))}
+              onClick={() => {
+                const next = { ...layoutRef.current };
+                delete next.topicRect;
+                updateLayout(next);
+              }}
             >
               <Trash2 className="w-3.5 h-3.5 mr-1" />
               Konu Alanını Sil
@@ -213,7 +289,11 @@ export default function TemplateEditorModal({ template, onClose }: Props) {
             <Button
               size="sm" variant="ghost"
               className="text-rose-500 hover:text-rose-700"
-              onClick={() => setLayout(p => ({ ...p, questionStartY: undefined }))}
+              onClick={() => {
+                const next = { ...layoutRef.current };
+                delete next.questionStartY;
+                updateLayout(next);
+              }}
             >
               <Trash2 className="w-3.5 h-3.5 mr-1" />
               Çizgiyi Sil
@@ -232,18 +312,14 @@ export default function TemplateEditorModal({ template, onClose }: Props) {
             ref={canvasRef}
             width={CANVAS_W}
             height={CANVAS_H}
-            className="border border-slate-300 shadow-md bg-white"
+            className="border border-slate-300 shadow-md bg-white select-none"
             style={{
               width: '100%',
               maxWidth: 460,
               height: 'auto',
-              cursor: tool === 'topic' ? 'crosshair' : tool === 'line' ? 'row-resize' : 'default',
-              userSelect: 'none',
+              cursor,
+              touchAction: 'none',
             }}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onClick={handleClick}
           />
         </div>
 
