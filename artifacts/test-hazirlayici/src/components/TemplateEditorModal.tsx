@@ -148,73 +148,110 @@ export default function TemplateEditorModal({ template, onClose }: Props) {
     redraw();
   }, [layout, redraw]);
 
-  // Native event listeners on the canvas (avoid stale closure issues)
+  // Native event listeners on the canvas (avoid stale closure issues, supports touch)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const onMouseDown = (e: MouseEvent) => {
-      if (toolRef.current !== 'topic') return;
-      e.preventDefault();
-      const coords = getCoords(e);
+    const clientCoords = (e: MouseEvent | Touch) => {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)),
+        y: Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height)),
+      };
+    };
+
+    const startDrag = (coords: { x: number; y: number }) => {
       dragStartRef.current = coords;
       dragCurrentRef.current = coords;
       isDraggingRef.current = true;
     };
 
-    const onMouseMove = (e: MouseEvent) => {
-      if (!isDraggingRef.current || toolRef.current !== 'topic') return;
-      e.preventDefault();
-      const coords = getCoords(e);
+    const moveDrag = (coords: { x: number; y: number }) => {
+      if (!isDraggingRef.current) return;
       dragCurrentRef.current = coords;
-
       const x = Math.min(dragStartRef.current.x, coords.x);
       const y = Math.min(dragStartRef.current.y, coords.y);
       const w = Math.abs(coords.x - dragStartRef.current.x);
       const h = Math.abs(coords.y - dragStartRef.current.y);
-
       const preview = { x, y, w, h };
       setDragPreview(preview);
       drawPreview(preview);
     };
 
-    const onMouseUp = (e: MouseEvent) => {
-      if (!isDraggingRef.current || toolRef.current !== 'topic') return;
+    const endDrag = (coords: { x: number; y: number }) => {
+      if (!isDraggingRef.current) return;
       isDraggingRef.current = false;
-      const coords = getCoords(e);
-
       const x = Math.min(dragStartRef.current.x, coords.x);
       const y = Math.min(dragStartRef.current.y, coords.y);
       const w = Math.abs(coords.x - dragStartRef.current.x);
       const h = Math.abs(coords.y - dragStartRef.current.y);
-
       setDragPreview(null);
-
       if (w > 0.01 && h > 0.005) {
-        const next = { ...layoutRef.current, topicRect: { x, y, w, h } };
-        updateLayout(next);
+        updateLayout({ ...layoutRef.current, topicRect: { x, y, w, h } });
       } else {
         redraw();
       }
     };
 
+    // ── Mouse events ────────────────────────────────────────────
+    const onMouseDown = (e: MouseEvent) => {
+      if (toolRef.current !== 'topic') return;
+      e.preventDefault();
+      startDrag(clientCoords(e));
+    };
+    const onMouseMove = (e: MouseEvent) => {
+      if (toolRef.current !== 'topic') return;
+      moveDrag(clientCoords(e));
+    };
+    const onMouseUp = (e: MouseEvent) => {
+      if (toolRef.current !== 'topic') return;
+      endDrag(clientCoords(e));
+    };
     const onClick = (e: MouseEvent) => {
       if (toolRef.current !== 'line') return;
-      const coords = getCoords(e);
-      const next = { ...layoutRef.current, questionStartY: coords.y };
-      updateLayout(next);
+      updateLayout({ ...layoutRef.current, questionStartY: clientCoords(e).y });
+    };
+
+    // ── Touch events ─────────────────────────────────────────────
+    const onTouchStart = (e: TouchEvent) => {
+      if (toolRef.current !== 'topic') return;
+      e.preventDefault();
+      startDrag(clientCoords(e.touches[0]));
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (toolRef.current !== 'topic') return;
+      e.preventDefault();
+      moveDrag(clientCoords(e.touches[0]));
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      if (toolRef.current === 'topic') {
+        e.preventDefault();
+        const touch = e.changedTouches[0];
+        endDrag(clientCoords(touch));
+      } else if (toolRef.current === 'line') {
+        e.preventDefault();
+        const touch = e.changedTouches[0];
+        updateLayout({ ...layoutRef.current, questionStartY: clientCoords(touch).y });
+      }
     };
 
     canvas.addEventListener('mousedown', onMouseDown);
     canvas.addEventListener('mousemove', onMouseMove);
     canvas.addEventListener('mouseup', onMouseUp);
     canvas.addEventListener('click', onClick);
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
 
     return () => {
       canvas.removeEventListener('mousedown', onMouseDown);
       canvas.removeEventListener('mousemove', onMouseMove);
       canvas.removeEventListener('mouseup', onMouseUp);
       canvas.removeEventListener('click', onClick);
+      canvas.removeEventListener('touchstart', onTouchStart);
+      canvas.removeEventListener('touchmove', onTouchMove);
+      canvas.removeEventListener('touchend', onTouchEnd);
     };
   }, [drawPreview, redraw, updateLayout]);
 
