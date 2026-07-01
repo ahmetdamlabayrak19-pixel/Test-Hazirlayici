@@ -11,6 +11,7 @@ import { db } from '@/lib/db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useToast } from '@/hooks/use-toast';
 import TemplateEditorModal from './TemplateEditorModal';
+import { TITLE_FONT_OPTIONS, DEFAULT_TITLE_FONT } from '@/lib/fonts';
 
 interface TestBuilderProps {
   questions: Question[];
@@ -18,10 +19,12 @@ interface TestBuilderProps {
   accentColor: string;
   questionGapMm: number;
   templateId?: number;
+  titleFont: string;
   onTopicTextChange: (v: string) => void;
   onAccentColorChange: (v: string) => void;
   onQuestionGapChange: (v: number) => void;
   onTemplateChange: (id?: number) => void;
+  onTitleFontChange: (v: string) => void;
 }
 
 export default function TestBuilder({
@@ -30,10 +33,12 @@ export default function TestBuilder({
   accentColor,
   questionGapMm,
   templateId,
+  titleFont,
   onTopicTextChange,
   onAccentColorChange,
   onQuestionGapChange,
   onTemplateChange,
+  onTitleFontChange,
 }: TestBuilderProps) {
   const templates = useLiveQuery(() => db.templates.toArray());
   const [isGenerating, setIsGenerating] = useState(false);
@@ -54,6 +59,7 @@ export default function TestBuilder({
         topicText,
         accentColor,
         questionGapMm,
+        titleFont,
         templateDataUrl: selectedTemplate?.imageDataUrl,
         templateLayout: selectedTemplate?.layout,
       }, action);
@@ -94,6 +100,34 @@ export default function TestBuilder({
               <span className="text-xs text-slate-400 font-mono">{accentColor}</span>
             </div>
           </div>
+        </div>
+
+        {/* Başlık Fontu */}
+        <div>
+          <Label className="mb-1.5 block text-sm font-medium">Başlık Fontu</Label>
+          <Select
+            value={titleFont}
+            onValueChange={onTitleFontChange}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Font seçin..." />
+            </SelectTrigger>
+            <SelectContent className="max-h-64">
+              {TITLE_FONT_OPTIONS.map(f => (
+                <SelectItem key={f.value} value={f.value}>
+                  <span style={{ fontFamily: f.value }}>{f.label}</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {topicText && (
+            <p
+              className="mt-1.5 text-sm text-slate-600 truncate"
+              style={{ fontFamily: titleFont }}
+            >
+              {topicText}
+            </p>
+          )}
         </div>
 
         {/* Soru arası boşluk */}

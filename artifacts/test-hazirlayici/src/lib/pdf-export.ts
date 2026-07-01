@@ -7,6 +7,7 @@ export interface ExportConfig {
   templateDataUrl?: string;
   templateLayout?: TemplateLayout;
   questionGapMm?: number; // varsayılan 3mm
+  titleFont?: string; // varsayılan 'Arial, sans-serif'
 }
 
 // A4 @ 200 DPI — iyi baskı kalitesi
@@ -89,6 +90,7 @@ function drawPageNumber(ctx: CanvasRenderingContext2D, num: number, color: strin
 
 async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
   const { questions, topicText, accentColor, templateDataUrl, templateLayout } = config;
+  const titleFont = config.titleFont ?? 'Arial, sans-serif';
   const rowGap = Math.round((config.questionGapMm ?? 3) * MM);
   const bottomLimit = PAGE_H - MARGIN - PAGE_BOTTOM_RESERVE;
   const pages: HTMLCanvasElement[] = [];
@@ -119,7 +121,7 @@ async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
     const rx = x * PAGE_W, ry = y * PAGE_H, rw = w * PAGE_W, rh = h * PAGE_H;
     ctx1.save();
     const fs = Math.max(Math.round(rh * 0.45), Math.round(6 * MM));
-    ctx1.font = `bold ${fs}px Arial, sans-serif`;
+    ctx1.font = `bold ${fs}px ${titleFont}`;
     ctx1.fillStyle = '#000000';
     ctx1.textAlign = 'center';
     ctx1.textBaseline = 'middle';
@@ -193,7 +195,7 @@ async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
     ctx.stroke();
     if (topicText) {
       ctx.fillStyle = '#000000';
-      ctx.font = `bold ${Math.round(TOPIC_FONT * 0.15)}px Arial, sans-serif`;
+      ctx.font = `bold ${Math.round(TOPIC_FONT * 0.15)}px ${titleFont}`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.fillText(

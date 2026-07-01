@@ -33,6 +33,7 @@ export interface TestProject {
   templateId?: number;
   topicText?: string;
   accentColor?: string;
+  titleFont?: string;
 }
 
 export interface Template {

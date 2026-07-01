@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { ArrowLeft, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db, Question, TestProject } from '@/lib/db';
+import { DEFAULT_TITLE_FONT } from '@/lib/fonts';
 import PdfViewer from '@/components/PdfViewer';
 import QuestionPool from '@/components/QuestionPool';
 import TestBuilder from '@/components/TestBuilder';
@@ -21,6 +22,7 @@ export default function TestWorkspacePage() {
   const [accentColor, setAccentColor] = useState('#2563eb');
   const [questionGapMm, setQuestionGapMm] = useState(3);
   const [templateId, setTemplateId] = useState<number | undefined>();
+  const [titleFont, setTitleFont] = useState(DEFAULT_TITLE_FONT);
 
   useEffect(() => {
     if (id && id !== 'new') {
@@ -31,6 +33,7 @@ export default function TestWorkspacePage() {
           setTopicText(project.topicText ?? '');
           setAccentColor(project.accentColor ?? '#2563eb');
           setTemplateId(project.templateId);
+          setTitleFont(project.titleFont ?? DEFAULT_TITLE_FONT);
         }
       });
     }
@@ -44,6 +47,7 @@ export default function TestWorkspacePage() {
         topicText,
         accentColor,
         templateId,
+        titleFont,
         updatedAt: new Date(),
         createdAt: new Date(),
         headerConfig: {
@@ -63,6 +67,7 @@ export default function TestWorkspacePage() {
           topicText: project.topicText,
           accentColor: project.accentColor,
           templateId: project.templateId,
+          titleFont: project.titleFont,
           updatedAt: project.updatedAt,
           headerConfig: project.headerConfig,
         });
@@ -158,10 +163,12 @@ export default function TestWorkspacePage() {
                 accentColor={accentColor}
                 questionGapMm={questionGapMm}
                 templateId={templateId}
+                titleFont={titleFont}
                 onTopicTextChange={setTopicText}
                 onAccentColorChange={setAccentColor}
                 onQuestionGapChange={setQuestionGapMm}
                 onTemplateChange={setTemplateId}
+                onTitleFontChange={setTitleFont}
               />
             </TabsContent>
           </div>
