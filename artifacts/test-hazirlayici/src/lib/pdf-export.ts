@@ -152,7 +152,8 @@ async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
   outer1: while (qi < questions.length) {
     const q = questions[qi];
     const img = qImgs[qi];
-    const rH = Math.round(COL_W * (q.height / q.width));
+    const scale = q.scale ?? 1.0;
+    const rH = Math.round(COL_W * scale * (q.height / q.width));
 
     let col = col1Y <= col2Y ? 0 : 1;
     let cY = col === 0 ? col1Y : col2Y;
@@ -166,7 +167,7 @@ async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
 
     const isNote = q.type === 'note';
     if (!isNote) qNum++;
-    placeQuestion(ctx1, img, isNote ? null : qNum, col, cY, rowGap, accentColor);
+    placeQuestion(ctx1, img, isNote ? null : qNum, col, cY, rowGap, accentColor, scale);
     if (col === 0) col1Y = cY + rH + rowGap;
     else col2Y = cY + rH + rowGap;
     qi++;
@@ -223,7 +224,8 @@ async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
     outerN: while (qi < questions.length) {
       const q = questions[qi];
       const img = qImgs[qi];
-      const rH = Math.round(COL_W * (q.height / q.width));
+      const scale = q.scale ?? 1.0;
+      const rH = Math.round(COL_W * scale * (q.height / q.width));
 
       let col = col1Y <= col2Y ? 0 : 1;
       let cY = col === 0 ? col1Y : col2Y;
@@ -237,7 +239,7 @@ async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
 
       const isNote = q.type === 'note';
       if (!isNote) qNum++;
-      placeQuestion(ctx, img, isNote ? null : qNum, col, cY, rowGap, accentColor);
+      placeQuestion(ctx, img, isNote ? null : qNum, col, cY, rowGap, accentColor, scale);
       if (col === 0) col1Y = cY + rH + rowGap;
       else col2Y = cY + rH + rowGap;
       qi++;
@@ -258,9 +260,9 @@ function placeQuestion(
   col: number,
   cY: number,
   _rowGap: number,
-  accentColor: string
+  accentColor: string,
+  scale: number
 ) {
-  const rH = Math.round(COL_W * (img.height / img.width));
   const x = MARGIN + col * (COL_W + COL_GAP);
   const borderW = 1.5;
   const radius = Math.round(2 * MM);
@@ -274,13 +276,17 @@ function placeQuestion(
     ctx.textAlign = 'left';
     const numW = ctx.measureText(numStr).width + Math.round(2 * MM);
     ctx.fillText(numStr, x, cY + Math.round(4.5 * MM));
-    ctx.drawImage(img, x + numW, cY, COL_W - numW, rH);
+    const imgW = Math.round((COL_W - numW) * scale);
+    const imgH = Math.round(imgW * (img.height / img.width));
+    ctx.drawImage(img, x + numW, cY, imgW, imgH);
   } else {
     // Hap bilgi — renkli kare çerçeve içinde, numarasız
-    ctx.drawImage(img, x, cY, COL_W, rH);
+    const imgW = Math.round(COL_W * scale);
+    const imgH = Math.round(imgW * (img.height / img.width));
+    ctx.drawImage(img, x, cY, imgW, imgH);
     ctx.strokeStyle = accentColor;
     ctx.lineWidth = borderW;
-    roundedRect(ctx, x, cY, COL_W, rH, radius);
+    roundedRect(ctx, x, cY, imgW, imgH, radius);
     ctx.stroke();
   }
   ctx.restore();
@@ -389,4 +395,5 @@ export async function generateTestPdf(
     window.open(url, '_blank');
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
-}
+                     }
+  
