@@ -12,6 +12,7 @@ export interface Question {
   height: number;
   order: number;
   type?: 'question' | 'note'; // eski kayıtlarda yok — okurken 'question' varsayılır
+  scale?: number;             // 0.5–1.5 arası; varsayılan 1.0 (yani %100)
 }
 
 export interface HeaderConfig {
