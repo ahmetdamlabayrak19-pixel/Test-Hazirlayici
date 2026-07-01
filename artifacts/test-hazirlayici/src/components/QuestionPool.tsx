@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, rectSortingStrategy } from '@dnd-kit/sortable';
-import { GripVertical, Trash2 } from 'lucide-react';
+import { GripVertical, Trash2, ZoomIn } from 'lucide-react';
 import { Button } from './ui/button';
+import { Slider } from './ui/slider';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Question } from '@/lib/db';
 
 function TypeBadge({
@@ -54,7 +57,6 @@ export default function QuestionPool({ questions, setQuestions }: QuestionPoolPr
       const [moved] = newQuestions.splice(oldIndex, 1);
       newQuestions.splice(newIndex, 0, moved);
       
-      // Update order
       setQuestions(newQuestions.map((q, i) => ({ ...q, order: i })));
     }
   }
@@ -67,6 +69,10 @@ export default function QuestionPool({ questions, setQuestions }: QuestionPoolPr
     setQuestions(questions.map(q =>
       q.id === id ? { ...q, type: (q.type ?? 'question') === 'note' ? 'question' : 'note' } : q
     ));
+  };
+
+  const handleScaleChange = (id: string, scale: number) => {
+    setQuestions(questions.map(q => q.id === id ? { ...q, scale } : q));
   };
 
   if (questions.length === 0) {
@@ -89,6 +95,7 @@ export default function QuestionPool({ questions, setQuestions }: QuestionPoolPr
                 index={i} 
                 onDelete={() => handleDelete(q.id)} 
                 onToggleType={() => handleToggleType(q.id)}
+                onScaleChange={(scale) => handleScaleChange(q.id, scale)}
               />
             ))}
           </div>
@@ -103,9 +110,10 @@ interface SortableQuestionCardProps {
   index: number;
   onDelete: () => void;
   onToggleType: () => void;
+  onScaleChange: (scale: number) => void;
 }
 
-function SortableQuestionCard({ question, index, onDelete, onToggleType }: SortableQuestionCardProps) {
+function SortableQuestionCard({ question, index, onDelete, onToggleType, onScaleChange }: SortableQuestionCardProps) {
   const {
     attributes,
     listeners,
@@ -114,12 +122,16 @@ function SortableQuestionCard({ question, index, onDelete, onToggleType }: Sorta
     transition,
   } = useSortable({ id: question.id });
 
+  const [open, setOpen] = useState(false);
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
   };
 
   const type: 'question' | 'note' = question.type ?? 'question';
+  const scale = question.scale ?? 1.0;
+  const scalePct = Math.round(scale * 100);
 
   return (
     <div 
@@ -141,17 +153,67 @@ function SortableQuestionCard({ question, index, onDelete, onToggleType }: Sorta
           </span>
           <TypeBadge type={type} onToggle={onToggleType} />
         </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={onDelete}>
-          <Trash2 className="w-4 h-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 text-slate-500 hover:text-slate-700 gap-1"
+                title="Ölçekle"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+                <span className="text-xs font-medium">{scalePct}%</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-4" side="bottom" align="end">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-slate-700">Ölçek</span>
+                  <span className="text-sm font-bold text-primary tabular-nums">{scalePct}%</span>
+                </div>
+                <Slider
+                  min={50}
+                  max={150}
+                  step={5}
+                  value={[scalePct]}
+                  onValueChange={([v]) => onScaleChange(v / 100)}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-slate-400">
+                  <span>50% (küçük)</span>
+                  <span>150% (büyük)</span>
+                </div>
+                <div className="mt-1 rounded border bg-slate-50 flex items-center justify-center overflow-hidden" style={{ minHeight: 80 }}>
+                  <img
+                    src={question.imageDataUrl}
+                    alt="Önizleme"
+                    style={{
+                      maxWidth: '100%',
+                      maxHeight: 160,
+                      width: `${scale * 100}%`,
+                      objectFit: 'contain',
+                    }}
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 text-center">PDF'de bu ölçekte yerleştirilir</p>
+              </div>
+            </PopoverContent>
+          </Popover>
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={onDelete}>
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
-      <div className="p-2 flex-1 flex items-center justify-center bg-slate-100 min-h-[100px]">
+      <div className="p-2 flex-1 flex items-center justify-center bg-slate-100 min-h-[100px] overflow-hidden">
         <img 
           src={question.imageDataUrl} 
           alt={`Soru ${index + 1}`} 
-          className="max-w-full max-h-[200px] object-contain border bg-white" 
+          className="max-h-[200px] object-contain border bg-white"
+          style={{ width: `${scale * 100}%` }}
         />
       </div>
     </div>
   );
-}
+      }
+                  
