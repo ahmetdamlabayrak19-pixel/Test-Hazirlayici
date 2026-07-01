@@ -11,6 +11,7 @@ export interface Question {
   width: number;
   height: number;
   order: number;
+  type?: 'question' | 'note'; // eski kayıtlarda yok — okurken 'question' varsayılır
 }
 
 export interface HeaderConfig {

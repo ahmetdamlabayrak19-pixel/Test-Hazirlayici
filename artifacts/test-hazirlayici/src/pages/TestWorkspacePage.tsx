@@ -78,13 +78,19 @@ export default function TestWorkspacePage() {
     }
   };
 
-  const handleQuestionCropped = (imageDataUrl: string, width: number, height: number) => {
+  const handleQuestionCropped = (
+    imageDataUrl: string,
+    width: number,
+    height: number,
+    type: 'question' | 'note' = 'question'
+  ) => {
     const newQuestion: Question = {
       id: crypto.randomUUID(),
       imageDataUrl,
       width,
       height,
       order: questions.length,
+      type,
     };
     setQuestions(prev => [...prev, newQuestion]);
   };

@@ -6,6 +6,30 @@ import { GripVertical, Trash2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Question } from '@/lib/db';
 
+function TypeBadge({
+  type,
+  onToggle,
+}: {
+  type: 'question' | 'note';
+  onToggle: () => void;
+}) {
+  const isNote = type === 'note';
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title="Tipini değiştirmek için tıklayın"
+      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors ${
+        isNote
+          ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+          : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+      }`}
+    >
+      {isNote ? 'HAP BİLGİ' : 'SORU'}
+    </button>
+  );
+}
+
 interface QuestionPoolProps {
   questions: Question[];
   setQuestions: (questions: Question[]) => void;
@@ -39,6 +63,12 @@ export default function QuestionPool({ questions, setQuestions }: QuestionPoolPr
     setQuestions(questions.filter(q => q.id !== id).map((q, i) => ({ ...q, order: i })));
   };
 
+  const handleToggleType = (id: string) => {
+    setQuestions(questions.map(q =>
+      q.id === id ? { ...q, type: (q.type ?? 'question') === 'note' ? 'question' : 'note' } : q
+    ));
+  };
+
   if (questions.length === 0) {
     return (
       <div className="h-full flex flex-col items-center justify-center text-slate-400 p-8 text-center">
@@ -58,6 +88,7 @@ export default function QuestionPool({ questions, setQuestions }: QuestionPoolPr
                 question={q} 
                 index={i} 
                 onDelete={() => handleDelete(q.id)} 
+                onToggleType={() => handleToggleType(q.id)}
               />
             ))}
           </div>
@@ -71,9 +102,10 @@ interface SortableQuestionCardProps {
   question: Question;
   index: number;
   onDelete: () => void;
+  onToggleType: () => void;
 }
 
-function SortableQuestionCard({ question, index, onDelete }: SortableQuestionCardProps) {
+function SortableQuestionCard({ question, index, onDelete, onToggleType }: SortableQuestionCardProps) {
   const {
     attributes,
     listeners,
@@ -86,6 +118,8 @@ function SortableQuestionCard({ question, index, onDelete }: SortableQuestionCar
     transform: CSS.Transform.toString(transform),
     transition,
   };
+
+  const type: 'question' | 'note' = question.type ?? 'question';
 
   return (
     <div 
@@ -105,6 +139,7 @@ function SortableQuestionCard({ question, index, onDelete }: SortableQuestionCar
           <span className="font-semibold text-sm bg-primary text-white w-6 h-6 flex items-center justify-center rounded-full">
             {index + 1}
           </span>
+          <TypeBadge type={type} onToggle={onToggleType} />
         </div>
         <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={onDelete}>
           <Trash2 className="w-4 h-4" />

@@ -5,7 +5,7 @@ import { Upload, ZoomIn, ZoomOut, MousePointer2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface PdfViewerProps {
-  onQuestionCropped: (imageDataUrl: string, width: number, height: number) => void;
+  onQuestionCropped: (imageDataUrl: string, width: number, height: number, type: 'question' | 'note') => void;
 }
 
 export default function PdfViewer({ onQuestionCropped }: PdfViewerProps) {
@@ -91,6 +91,7 @@ function PdfPage({ pageNumber, pdfDoc, scale, onCrop }: any) {
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
   const [currentPos, setCurrentPos] = useState({ x: 0, y: 0 });
+  const [pendingCrop, setPendingCrop] = useState<{ dataUrl: string; w: number; h: number } | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -190,8 +191,19 @@ function PdfPage({ pageNumber, pdfDoc, scale, onCrop }: any) {
     ctx.drawImage(hiResCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
     const dataUrl = offscreen.toDataURL('image/png');
 
-    onCrop(dataUrl, cropW, cropH);
-    toast({ title: 'Başarılı', description: 'Soru eklendi.', duration: 2000 });
+    // Kaydetmeden önce kullanıcıya içerik tipini sor
+    setPendingCrop({ dataUrl, w: cropW, h: cropH });
+  };
+
+  const confirmPendingCrop = (type: 'question' | 'note') => {
+    if (!pendingCrop) return;
+    onCrop(pendingCrop.dataUrl, pendingCrop.w, pendingCrop.h, type);
+    toast({
+      title: 'Başarılı',
+      description: type === 'note' ? 'Hap bilgi eklendi.' : 'Soru eklendi.',
+      duration: 2000,
+    });
+    setPendingCrop(null);
   };
 
   const drawLeft = Math.min(startPos.x, currentPos.x);
@@ -221,6 +233,30 @@ function PdfPage({ pageNumber, pdfDoc, scale, onCrop }: any) {
           />
         )}
       </div>
+
+      {pendingCrop && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-lg shadow-lg p-4 w-72 flex flex-col gap-3">
+            <p className="text-sm font-medium text-slate-700 text-center">Bu içerik nedir?</p>
+            <img
+              src={pendingCrop.dataUrl}
+              alt="Seçilen alan"
+              className="max-h-40 w-full object-contain border rounded bg-slate-50"
+            />
+            <div className="flex gap-2">
+              <Button className="flex-1" onClick={() => confirmPendingCrop('question')}>
+                Soru
+              </Button>
+              <Button className="flex-1" variant="secondary" onClick={() => confirmPendingCrop('note')}>
+                Hap Bilgi
+              </Button>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setPendingCrop(null)}>
+              Vazgeç
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

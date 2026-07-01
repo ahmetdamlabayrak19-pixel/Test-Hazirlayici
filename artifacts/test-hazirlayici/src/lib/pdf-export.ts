@@ -145,6 +145,7 @@ async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
 
   let col1Y = startY, col2Y = startY;
   let qi = 0;
+  let qNum = 0; // sadece type === 'question' için artan numara; 'note' numara almaz
 
   outer1: while (qi < questions.length) {
     const q = questions[qi];
@@ -161,7 +162,9 @@ async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
       else break outer1;
     }
 
-    placeQuestion(ctx1, img, q, qi, col, cY, rowGap);
+    const isNote = q.type === 'note';
+    if (!isNote) qNum++;
+    placeQuestion(ctx1, img, isNote ? null : qNum, col, cY, rowGap);
     if (col === 0) col1Y = cY + rH + rowGap;
     else col2Y = cY + rH + rowGap;
     qi++;
@@ -230,7 +233,9 @@ async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
         else break outerN;
       }
 
-      placeQuestion(ctx, img, q, qi, col, cY, rowGap);
+      const isNote = q.type === 'note';
+      if (!isNote) qNum++;
+      placeQuestion(ctx, img, isNote ? null : qNum, col, cY, rowGap);
       if (col === 0) col1Y = cY + rH + rowGap;
       else col2Y = cY + rH + rowGap;
       qi++;
@@ -247,22 +252,28 @@ async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
 function placeQuestion(
   ctx: CanvasRenderingContext2D,
   img: HTMLImageElement,
-  q: Question,
-  qi: number,
+  qNum: number | null,
   col: number,
   cY: number,
   _rowGap: number
 ) {
-  const rH = Math.round(COL_W * (q.height / q.width));
+  const rH = Math.round(COL_W * (img.height / img.width));
   const x = MARGIN + col * (COL_W + COL_GAP);
-  const numStr = `${qi + 1}.`;
+
   ctx.save();
-  ctx.font = `bold ${Q_NUM_FONT}px Arial, sans-serif`;
-  ctx.fillStyle = '#000';
-  ctx.textAlign = 'left';
-  const numW = ctx.measureText(numStr).width + Math.round(2 * MM);
-  ctx.fillText(numStr, x, cY + Math.round(4.5 * MM));
-  ctx.drawImage(img, x + numW, cY, COL_W - numW, rH);
+  if (qNum !== null) {
+    // Soru — numaralandırılır
+    const numStr = `${qNum}.`;
+    ctx.font = `bold ${Q_NUM_FONT}px Arial, sans-serif`;
+    ctx.fillStyle = '#000';
+    ctx.textAlign = 'left';
+    const numW = ctx.measureText(numStr).width + Math.round(2 * MM);
+    ctx.fillText(numStr, x, cY + Math.round(4.5 * MM));
+    ctx.drawImage(img, x + numW, cY, COL_W - numW, rH);
+  } else {
+    // Hap bilgi — numarasız, tam sütun genişliğinde normal içerik olarak yerleştirilir
+    ctx.drawImage(img, x, cY, COL_W, rH);
+  }
   ctx.restore();
 }
 
