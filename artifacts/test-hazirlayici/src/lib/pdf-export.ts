@@ -166,7 +166,7 @@ async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
 
     const isNote = q.type === 'note';
     if (!isNote) qNum++;
-    placeQuestion(ctx1, img, isNote ? null : qNum, col, cY, rowGap);
+    placeQuestion(ctx1, img, isNote ? null : qNum, col, cY, rowGap, accentColor);
     if (col === 0) col1Y = cY + rH + rowGap;
     else col2Y = cY + rH + rowGap;
     qi++;
@@ -237,7 +237,7 @@ async function buildPages(config: ExportConfig): Promise<HTMLCanvasElement[]> {
 
       const isNote = q.type === 'note';
       if (!isNote) qNum++;
-      placeQuestion(ctx, img, isNote ? null : qNum, col, cY, rowGap);
+      placeQuestion(ctx, img, isNote ? null : qNum, col, cY, rowGap, accentColor);
       if (col === 0) col1Y = cY + rH + rowGap;
       else col2Y = cY + rH + rowGap;
       qi++;
@@ -257,10 +257,13 @@ function placeQuestion(
   qNum: number | null,
   col: number,
   cY: number,
-  _rowGap: number
+  _rowGap: number,
+  accentColor: string
 ) {
   const rH = Math.round(COL_W * (img.height / img.width));
   const x = MARGIN + col * (COL_W + COL_GAP);
+  const borderW = Math.round(1.5 * MM);
+  const radius = Math.round(2 * MM);
 
   ctx.save();
   if (qNum !== null) {
@@ -273,8 +276,12 @@ function placeQuestion(
     ctx.fillText(numStr, x, cY + Math.round(4.5 * MM));
     ctx.drawImage(img, x + numW, cY, COL_W - numW, rH);
   } else {
-    // Hap bilgi — numarasız, tam sütun genişliğinde normal içerik olarak yerleştirilir
+    // Hap bilgi — renkli kare çerçeve içinde, numarasız
     ctx.drawImage(img, x, cY, COL_W, rH);
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = borderW;
+    roundedRect(ctx, x, cY, COL_W, rH, radius);
+    ctx.stroke();
   }
   ctx.restore();
 }

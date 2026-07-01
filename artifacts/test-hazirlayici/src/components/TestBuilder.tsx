@@ -255,20 +255,38 @@ export default function TestBuilder({
                   style={{ backgroundColor: accentColor }}
                 />
                 <div className="flex-1 overflow-hidden flex flex-col" style={{ gap: `${questionGapMm * 0.4}px` }}>
-                  {questions.filter((_, i) => i % 2 === 0).map((q, i) => (
-                    <div key={q.id} className="flex items-start gap-0.5 shrink-0">
-                      <span className="font-bold shrink-0">{i * 2 + 1}.</span>
-                      <img src={q.imageDataUrl} alt="" className="w-full h-auto" />
-                    </div>
-                  ))}
+                  {questions.filter((_, i) => i % 2 === 0).map((q, colIdx) => {
+                    const isNote = q.type === 'note';
+                    const qNum = questions.slice(0, colIdx * 2 + 1).filter(x => x.type !== 'note').length;
+                    return (
+                      <div key={q.id} className="flex items-start gap-0.5 shrink-0">
+                        {!isNote && <span className="font-bold shrink-0">{qNum}.</span>}
+                        <img
+                          src={q.imageDataUrl}
+                          alt=""
+                          className="w-full h-auto"
+                          style={isNote ? { border: `1.5px solid ${accentColor}`, borderRadius: '2px' } : undefined}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
                 <div className="flex-1 overflow-hidden flex flex-col" style={{ gap: `${questionGapMm * 0.4}px` }}>
-                  {questions.filter((_, i) => i % 2 === 1).map((q, i) => (
-                    <div key={q.id} className="flex items-start gap-0.5 shrink-0">
-                      <span className="font-bold shrink-0">{i * 2 + 2}.</span>
-                      <img src={q.imageDataUrl} alt="" className="w-full h-auto" />
-                    </div>
-                  ))}
+                  {questions.filter((_, i) => i % 2 === 1).map((q, colIdx) => {
+                    const isNote = q.type === 'note';
+                    const qNum = questions.slice(0, colIdx * 2 + 2).filter(x => x.type !== 'note').length;
+                    return (
+                      <div key={q.id} className="flex items-start gap-0.5 shrink-0">
+                        {!isNote && <span className="font-bold shrink-0">{qNum}.</span>}
+                        <img
+                          src={q.imageDataUrl}
+                          alt=""
+                          className="w-full h-auto"
+                          style={isNote ? { border: `1.5px solid ${accentColor}`, borderRadius: '2px' } : undefined}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               {/* Sayfa no */}
