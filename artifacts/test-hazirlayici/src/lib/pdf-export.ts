@@ -262,7 +262,7 @@ function placeQuestion(
 ) {
   const rH = Math.round(COL_W * (img.height / img.width));
   const x = MARGIN + col * (COL_W + COL_GAP);
-  const borderW = Math.round(1.5 * MM);
+  const borderW = 1.5;
   const radius = Math.round(2 * MM);
 
   ctx.save();
