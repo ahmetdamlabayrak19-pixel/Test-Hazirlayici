@@ -80,9 +80,14 @@ export default function PdfViewer({ onQuestionCropped }: PdfViewerProps) {
   );
 }
 
+// Kırpma her zaman bu sabit yüksek çözünürlük ölçeğinden yapılır; ekran zoom
+// seviyesinden (scale) tamamen bağımsızdır, böylece düşük zoomda bile net kalite elde edilir.
+const CROP_RENDER_SCALE = 3;
+
 function PdfPage({ pageNumber, pdfDoc, scale, onCrop }: any) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const hiResCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
   const [currentPos, setCurrentPos] = useState({ x: 0, y: 0 });
@@ -99,6 +104,11 @@ function PdfPage({ pageNumber, pdfDoc, scale, onCrop }: any) {
     renderPage();
     return () => { active = false; };
   }, [pageNumber, pdfDoc, scale]);
+
+  // Sayfa veya belge değişirse önbelleğe alınmış yüksek çözünürlüklü canvas geçersiz olur
+  useEffect(() => {
+    hiResCanvasRef.current = null;
+  }, [pageNumber, pdfDoc]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (!overlayRef.current) return;
@@ -144,19 +154,43 @@ function PdfPage({ pageNumber, pdfDoc, scale, onCrop }: any) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isDrawing]);
 
-  const cropSelection = (x: number, y: number, w: number, h: number) => {
-    if (!canvasRef.current) return;
-    
+  const cropSelection = async (x: number, y: number, w: number, h: number) => {
+    if (!canvasRef.current || !pdfDoc) return;
+
+    // Ekranda seçilen alanı, görüntülenen (zoom'a bağlı) canvas'a göre 0-1
+    // aralığında oransal koordinatlara çevir. Bu oranlar zoom seviyesinden bağımsızdır.
+    const displayW = canvasRef.current.width;
+    const displayH = canvasRef.current.height;
+    const rx = x / displayW;
+    const ry = y / displayH;
+    const rw = w / displayW;
+    const rh = h / displayH;
+
+    // PDF sayfasını sabit yüksek çözünürlükte bir kere render edip önbelleğe al;
+    // kırpma her zaman bu yüksek çözünürlüklü kaynaktan yapılır (ekran zoom'undan bağımsız).
+    let hiResCanvas = hiResCanvasRef.current;
+    if (!hiResCanvas) {
+      const page = await pdfDoc.getPage(pageNumber);
+      hiResCanvas = document.createElement('canvas');
+      await renderPageToCanvas(page, hiResCanvas, CROP_RENDER_SCALE);
+      hiResCanvasRef.current = hiResCanvas;
+    }
+
+    const cropX = rx * hiResCanvas.width;
+    const cropY = ry * hiResCanvas.height;
+    const cropW = rw * hiResCanvas.width;
+    const cropH = rh * hiResCanvas.height;
+
     const offscreen = document.createElement('canvas');
-    offscreen.width = w;
-    offscreen.height = h;
+    offscreen.width = cropW;
+    offscreen.height = cropH;
     const ctx = offscreen.getContext('2d');
     if (!ctx) return;
 
-    ctx.drawImage(canvasRef.current, x, y, w, h, 0, 0, w, h);
+    ctx.drawImage(hiResCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
     const dataUrl = offscreen.toDataURL('image/png');
-    
-    onCrop(dataUrl, w, h);
+
+    onCrop(dataUrl, cropW, cropH);
     toast({ title: 'Başarılı', description: 'Soru eklendi.', duration: 2000 });
   };
 
